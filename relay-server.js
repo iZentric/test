@@ -9,6 +9,10 @@ const meta = new WeakMap();
 wss.on('connection', (ws) => {
   meta.set(ws, {});
 
+  // Heartbeat: mark alive when we get a pong back
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+
   ws.on('message', (data) => {
     if (ws.readyState !== WebSocket.OPEN) return;
 
@@ -31,12 +35,12 @@ wss.on('connection', (ws) => {
           group.add(ws);
           console.log(`[+] ${info.username} (${info.uuid}) on ${info.server} [${group.size}]`);
           ws.send(JSON.stringify({ type: 'identified' }));
-          
+
           // Notify existing peers about the new player joining
-          const joinMsg = JSON.stringify({ 
-            type: 'peerJoined', 
-            uuid: msg.uuid, 
-            username: msg.username 
+          const joinMsg = JSON.stringify({
+            type: 'peerJoined',
+            uuid: msg.uuid,
+            username: msg.username
           });
           let notifiedCount = 0;
           for (const peer of group) {
@@ -47,12 +51,12 @@ wss.on('connection', (ws) => {
             }
           }
           console.log(`[PEER_JOIN] notified ${notifiedCount} existing peers`);
-          
+
           // Also tell the new player they joined (so they broadcast their outfit)
-          ws.send(JSON.stringify({ 
-            type: 'youJoined', 
-            uuid: msg.uuid, 
-            username: msg.username 
+          ws.send(JSON.stringify({
+            type: 'youJoined',
+            uuid: msg.uuid,
+            username: msg.username
           }));
           return;
         }
@@ -88,5 +92,22 @@ wss.on('connection', (ws) => {
     }
   });
 });
+
+// Ping every connection periodically so the hosting proxy sees active
+// traffic and doesn't kill the socket as idle. Also cleans up dead sockets
+// that never answer a ping (e.g. lost network) instead of leaking them.
+const HEARTBEAT_INTERVAL_MS = 20000;
+const heartbeat = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      console.log('[HEARTBEAT] terminating unresponsive connection');
+      return ws.terminate();
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, HEARTBEAT_INTERVAL_MS);
+
+wss.on('close', () => clearInterval(heartbeat));
 
 console.log(`Prometheus relay running on :${PORT}`);
