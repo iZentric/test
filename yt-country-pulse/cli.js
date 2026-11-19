@@ -10,6 +10,9 @@
 import { writeFile } from 'node:fs/promises';
 import { buildPulse } from './lib/pulse.js';
 import { COUNTRIES, countryOf } from './lib/countries.js';
+import { collectRange, dateRange } from './lib/collect.js';
+import { aggregate } from './lib/aggregate.js';
+import { CATEGORIES, categoryLabel } from './lib/classify.js';
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -43,6 +46,12 @@ YouTube Country Pulse — CLI
   --demo            Date eșantion, fără cereri către Google
   --json <fișier>   Scrie răspunsul complet în fișier JSON
   --csv             Afișează CSV în loc de sumar
+
+  --range <zile>    Colectează ultimele N zile (ex. 30, 365) și agregă tabelul
+  --from <data>     Începutul intervalului (YYYY-MM-DD)
+  --to <data>       Sfârșitul intervalului (YYYY-MM-DD, implicit ieri)
+  --exclude <listă> Scurtături de categorii de exclus (ex. news,sport)
+  --top <n>         Câte rânduri să afișezi în tabel (implicit 40)
   --list            Afișează țările suportate
   --help            Acest mesaj
 
@@ -76,6 +85,11 @@ async function main() {
   if (args.help) return help();
   if (args.list) {
     for (const c of COUNTRIES) console.log(`${c.code}  ${c.flag}  ${c.name}`);
+    return;
+  }
+
+  if (args.range || args.from) {
+    await runRange(args);
     return;
   }
 
@@ -147,6 +161,108 @@ async function main() {
   console.log('  SURSE');
   (payload.sources || []).forEach((s) => console.log(`    [${s.status}] ${s.label} — ${s.provider}${s.error ? ` (${s.error})` : ''}`));
   console.log('');
+}
+
+
+function csvOfRows(rows) {
+  const header = ['rank', 'query', 'categorie', 'zile_aparitie', 'trafic_cumulat_estimat', 'cel_mai_bun_loc', 'prima_zi', 'ultima_zi', 'consistenta'];
+  const lines = [header.join(',')];
+  rows.forEach((r, i) => {
+    lines.push(
+      [i + 1, r.query, categoryLabel(r.category), r.days, r.totalTraffic, r.bestRank, r.firstSeen, r.lastSeen, r.consistency]
+        .map(csvCell)
+        .join(','),
+    );
+  });
+  return lines.join('\n');
+}
+
+async function runRange(args) {
+  const geo = String(args.geo || 'RO').toUpperCase();
+  const today = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const to = typeof args.to === 'string' ? args.to : today;
+  let from;
+  if (typeof args.from === 'string') from = args.from;
+  else {
+    const days = Math.max(1, Math.min(Number(args.range) || 30, 400));
+    from = new Date(Date.parse(`${to}T00:00:00Z`) - (days - 1) * 86400000).toISOString().slice(0, 10);
+  }
+  const demo = Boolean(args.demo);
+  const exclude = String(args.exclude || '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  const top = Number(args.top) || 40;
+
+  const total = dateRange(from, to).length;
+  console.error(`Colectez ${total} zile pentru ${geo} (${from} → ${to})${demo ? ' [DEMO]' : ''}…`);
+
+  const collected = await collectRange({
+    geo,
+    from,
+    to,
+    demo,
+    onProgress: (p) => {
+      if (p.index % 10 === 0 || p.index === p.total) {
+        process.stderr.write(`\r  ${p.index}/${p.total} zile · ${p.done} cu date · ${p.empty} goale · ${p.failed} erori   `);
+      }
+    },
+  });
+  process.stderr.write('\n');
+
+  const agg = aggregate(collected.days);
+  const rows = agg.rows.filter((r) => !exclude.includes(r.category));
+  const shown = rows.slice(0, top);
+
+  if (args.csv) {
+    process.stdout.write(`\uFEFF${csvOfRows(rows)}`);
+    return;
+  }
+
+  console.log('');
+  console.log(`  ${geo}  ·  ${from} → ${to}  ·  ${collected.days.length}/${total} zile cu date${demo ? '  [DEMO]' : ''}`);
+  console.log(`  ${agg.totals.uniqueQueries} interogări unice · ${agg.totals.listedQueries} în tabel · trafic cumulat estimat ${nf.format(agg.totals.totalTraffic)}`);
+  if (exclude.length) console.log(`  categorii excluse: ${exclude.map(categoryLabel).join(', ')}`);
+  console.log('  ' + '─'.repeat(78));
+  console.log(`  ${'#'.padStart(4)}  ${'interogare'.padEnd(34)} ${'categorie'.padEnd(22)} ${'zile'.padStart(5)} ${'trafic'.padStart(10)}`);
+  console.log('  ' + '─'.repeat(78));
+  shown.forEach((r, i) => {
+    console.log(
+      `  ${String(i + 1).padStart(4)}  ${r.query.slice(0, 34).padEnd(34)} ${categoryLabel(r.category).slice(0, 22).padEnd(22)} ${String(r.days).padStart(5)} ${nfCompact.format(r.totalTraffic).padStart(10)}`,
+    );
+  });
+
+  if (agg.categories.length) {
+    console.log('');
+    console.log('  CATEGORII');
+    agg.categories.forEach((c) => {
+      const excluded = exclude.includes(c.id) ? ' (exclus)' : '';
+      console.log(`    ${c.label.padEnd(26)} ${String(c.queries).padStart(5)} interogări  ${nfCompact.format(c.totalTraffic).padStart(9)}${excluded}`);
+    });
+  }
+
+  if (collected.empty.length) {
+    console.log('');
+    console.log(`  Zile fără date de la Google: ${collected.empty.length}${collected.empty.length <= 8 ? ` (${collected.empty.join(', ')})` : ''}`);
+  }
+  if (collected.failed.length) {
+    console.log(`  Zile cu erori: ${collected.failed.length}`);
+  }
+  console.log('');
+
+  if (args.json) {
+    await writeFile(String(args.json), JSON.stringify({ geo, from, to, demo, exclude, coverage: {
+      daysWithData: collected.days.length,
+      daysRequested: total,
+      empty: collected.empty,
+      failed: collected.failed,
+    }, ...agg }, null, 2), 'utf8');
+    console.error(`JSON scris în ${args.json}`);
+  }
+  if (args.out) {
+    await writeFile(String(args.out), `\uFEFF${csvOfRows(rows)}`, 'utf8');
+    console.error(`CSV scris în ${args.out}`);
+  }
 }
 
 main().catch((err) => {

@@ -6,6 +6,7 @@ const state = {
   countries: [],
   lastPayload: null,
   busy: false,
+  activeView: 'day',
 };
 
 const nf = new Intl.NumberFormat('ro-RO');
@@ -68,7 +69,11 @@ async function init() {
   $('#exportJson').addEventListener('click', exportJson);
   $('#exportCsv').addEventListener('click', exportCsv);
 
+  initTabs();
+  await initRange();
+
   load();
+  if (state.activeView !== 'range') switchTab('day');
 }
 
 function setBusy(busy) {
@@ -414,6 +419,7 @@ function download(filename, content, type) {
 }
 
 function exportJson() {
+  if (state.activeView === 'range') return exportRangeJson();
   if (!state.lastPayload) return;
   const geo = state.lastPayload.geo || 'RO';
   const date = state.lastPayload.date || 'latest';
@@ -426,6 +432,7 @@ function csvCell(value) {
 }
 
 function exportCsv() {
+  if (state.activeView === 'range') return exportRangeCsv();
   const p = state.lastPayload;
   if (!p) return;
 
@@ -458,6 +465,469 @@ function exportCsv() {
 
   const csv = rows.map((r) => r.map(csvCell).join(',')).join('\n');
   download(`youtube-pulse-${p.geo}-${p.date || 'latest'}.csv`, `\uFEFF${csv}`, 'text/csv;charset=utf-8');
+}
+
+
+/* ===================================================================
+   TABEL PE PERIOADĂ — colectare în fundal, agregare, filtre, export
+   =================================================================== */
+
+const range = {
+  jobId: null,
+  job: null,
+  result: null,
+  pollTimer: null,
+  excluded: new Set(),
+  search: '',
+  sort: 'days',
+  minDays: 1,
+  shown: 300,
+};
+
+function addDaysISO(dateStr, delta) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+function initTabs() {
+  document.querySelectorAll('.tab').forEach((btn) => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+}
+
+function switchTab(name) {
+  state.activeView = name === 'range' ? 'range' : 'day';
+  document.querySelectorAll('.tab').forEach((b) => {
+    const on = b.dataset.tab === state.activeView;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  $('#view-day').classList.toggle('hidden', state.activeView !== 'day');
+  $('#view-range').classList.toggle('hidden', state.activeView !== 'range');
+}
+
+async function initRange() {
+  const fill = (sel) => {
+    sel.innerHTML = state.countries
+      .map((c) => `<option value="${esc(c.code)}">${esc(c.flag)} ${esc(c.name)} (${esc(c.code)})</option>`)
+      .join('');
+  };
+  fill($('#rCountry'));
+  $('#rCountry').value = localStorage.getItem('ytp.geo') || 'RO';
+  if (!$('#rCountry').value) $('#rCountry').value = 'RO';
+
+  const to = yesterday();
+  $('#rTo').value = localStorage.getItem('ytp.rTo') || to;
+  $('#rFrom').value = localStorage.getItem('ytp.rFrom') || addDaysISO(to, -29);
+  $('#rDemo').checked = localStorage.getItem('ytp.demo') === '1';
+
+  document.querySelectorAll('.chip-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const days = Number(btn.dataset.days) || 30;
+      const end = $('#rTo').value || yesterday();
+      $('#rTo').value = end;
+      $('#rFrom').value = addDaysISO(end, -(days - 1));
+    });
+  });
+
+  $('#collectBtn').addEventListener('click', collect);
+  $('#cancelJob').addEventListener('click', cancelCollect);
+  $('#rSearch').addEventListener('input', (e) => {
+    range.search = e.target.value.trim().toLowerCase();
+    range.shown = 300;
+    renderTable();
+  });
+  $('#rSort').addEventListener('change', (e) => {
+    range.sort = e.target.value;
+    renderTable();
+  });
+  $('#rMinDays').addEventListener('change', (e) => {
+    range.minDays = Number(e.target.value) || 1;
+    range.shown = 300;
+    renderTable();
+  });
+  $('#rMore').addEventListener('click', () => {
+    range.shown += 300;
+    renderTable();
+    });
+
+  const saved = localStorage.getItem('ytp.job');
+  if (saved) resumeJob(saved);
+}
+
+function showRangeWarnings(items) {
+  const box = $('#rangeWarnings');
+  if (!items || !items.length) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = items
+    .map((w) => {
+      const ico = w.level === 'error' ? '⛔' : w.level === 'info' ? 'ℹ' : '⚠';
+      return `<div class="warn-item ${w.level === 'error' ? 'error' : ''}"><span class="ico">${ico}</span><span>${esc(w.text)}</span></div>`;
+    })
+    .join('');
+}
+
+async function resumeJob(id) {
+  try {
+    const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      localStorage.removeItem('ytp.job');
+      return;
+    }
+    const data = await res.json();
+    range.jobId = id;
+    range.job = data.job;
+    showJob(data.job);
+    if (['running', 'queued', 'cancelling'].includes(data.job.status)) {
+      switchTab('range');
+      startPolling(id);
+    } else if (data.result) {
+      range.result = data.result;
+      switchTab('range');
+      renderRange();
+    }
+  } catch {
+    /* ignoram: jobul poate fi expirat */
+  }
+}
+
+async function collect() {
+  const geo = $('#rCountry').value || 'RO';
+  const from = $('#rFrom').value;
+  const to = $('#rTo').value;
+  const demo = $('#rDemo').checked;
+
+  if (!from || !to) {
+    showRangeWarnings([{ level: 'error', text: 'Alege intervalul (de la / până la).' }]);
+    return;
+  }
+
+  localStorage.setItem('ytp.geo', geo);
+  localStorage.setItem('ytp.rFrom', from);
+  localStorage.setItem('ytp.rTo', to);
+  localStorage.setItem('ytp.demo', demo ? '1' : '0');
+
+  range.excluded = new Set();
+  range.search = '';
+  range.shown = 300;
+  $('#rSearch').value = '';
+  range.result = null;
+  $('#rBody').innerHTML = '';
+  $('#rCats').innerHTML = '';
+  $('#catBars').innerHTML = '';
+  $('#rangeStats').innerHTML = '';
+  showRangeWarnings([]);
+
+  $('#collectBtn').disabled = true;
+  setPill('busy', 'colectez');
+
+  try {
+    const res = await fetch('/api/collect', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ geo, from, to, demo }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      showRangeWarnings([{ level: 'error', text: data.error || 'Nu am putut porni colectarea.' }]);
+      $('#collectBtn').disabled = false;
+      setPill('error', 'eroare');
+      return;
+    }
+    range.jobId = data.jobId;
+    range.job = data.job;
+    localStorage.setItem('ytp.job', data.jobId);
+    showJob(data.job);
+    startPolling(data.jobId);
+  } catch (err) {
+    showRangeWarnings([{ level: 'error', text: `Serverul nu a răspuns: ${err.message}` }]);
+    $('#collectBtn').disabled = false;
+    setPill('error', 'eroare');
+  }
+}
+
+async function cancelCollect() {
+  if (!range.jobId) return;
+  try {
+    await fetch(`/api/jobs/${encodeURIComponent(range.jobId)}/cancel`, { method: 'POST' });
+  } catch {
+    /* ignoram */
+  }
+}
+
+function showJob(job) {
+  if (!job) return;
+  $('#jobBar').classList.remove('hidden');
+  const p = job.progress || {};
+  const pct = p.pct || 0;
+  $('#jobTitle').textContent =
+    job.status === 'done'
+      ? 'Colectare terminată'
+      : job.status === 'cancelled'
+        ? 'Colectare anulată'
+        : job.status === 'error'
+          ? 'Colectare eșuată'
+          : job.demo
+            ? 'Generez date demo…'
+            : 'Colectez de la Google Trends…';
+  $('#jobFill').style.width = `${job.status === 'done' ? 100 : pct}%`;
+  const parts = [
+    `${job.status === 'done' ? 100 : pct}%`,
+    `${p.index || 0}/${p.total || job.totalDays} zile`,
+    `${p.done || 0} cu date`,
+  ];
+  if (p.empty) parts.push(`${p.empty} goale`);
+  if (p.failed) parts.push(`${p.failed} erori`);
+  if (p.currentDate && job.status === 'running') parts.push(`la ${p.currentDate}`);
+  $('#jobText').textContent = parts.join(' · ');
+  $('#cancelJob').classList.toggle('hidden', job.status !== 'running' && job.status !== 'queued');
+}
+
+function startPolling(id) {
+  if (range.pollTimer) clearInterval(range.pollTimer);
+  const tick = async () => {
+    try {
+      const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        clearInterval(range.pollTimer);
+        range.pollTimer = null;
+        return;
+      }
+      range.job = data.job;
+      showJob(data.job);
+      if (['done', 'cancelled', 'error'].includes(data.job.status)) {
+        clearInterval(range.pollTimer);
+        range.pollTimer = null;
+        $('#collectBtn').disabled = false;
+        if (data.job.status === 'error') {
+          setPill('error', 'eroare');
+          showRangeWarnings([{ level: 'error', text: data.job.error || 'Colectarea a eșuat.' }]);
+          return;
+        }
+        if (data.result) {
+          range.result = data.result;
+          renderRange();
+        }
+      }
+    } catch {
+      clearInterval(range.pollTimer);
+      range.pollTimer = null;
+      $('#collectBtn').disabled = false;
+      setPill('error', 'eroare');
+    }
+  };
+  tick();
+  range.pollTimer = setInterval(tick, 1200);
+}
+
+/* ---------------- randare ---------------- */
+
+function renderRange() {
+  const r = range.result;
+  if (!r) return;
+
+  setPill(r.demo ? 'demo' : 'live', r.demo ? 'date demo' : 'tabel live');
+
+  const cov = r.coverage || {};
+  const warnings = [];
+  if (r.demo) {
+    warnings.push({ level: 'info', text: 'Date DEMO: eșantioane generate local, ca să vezi cum arată tabelul. Rulează local/Vercel pentru date reale.' });
+  }
+  if (cov.emptyDays?.length) {
+    warnings.push({
+      level: 'warn',
+      text: `${cov.emptyDays.length} zile nu au returnat date de la Google${cov.emptyDays.length <= 6 ? ` (${cov.emptyDays.join(', ')})` : ''}.`,
+    });
+  }
+  if (cov.failedDays?.length) {
+    warnings.push({ level: 'warn', text: `${cov.failedDays.length} zile au eșuat (reîncearcă — zilele bune sunt deja cache-uite).` });
+  }
+  if (cov.mismatchedDays?.length) {
+    warnings.push({
+      level: 'warn',
+      text: `${cov.mismatchedDays.length} zile au fost înlocuite de Google cu altă zi (limită de istoric a endpoint-ului).`,
+    });
+  }
+  showRangeWarnings(warnings);
+
+  renderRangeStats(r);
+  renderCategoryChips(r);
+  renderCategoryBars(r);
+  renderTable();
+
+  $('#tableSub').textContent = `${r.from} → ${r.to} · ${cov.daysWithData || 0} zile cu date`;
+  $('#rangeGeneratedAt').textContent = r.generatedAt
+    ? `generat ${new Date(r.generatedAt).toLocaleString('ro-RO')}`
+    : '';
+  $('#footGeo').textContent = `${r.country?.flag || ''} ${r.country?.name || r.geo} · ${r.from} → ${r.to}`;
+}
+
+function renderRangeStats(r) {
+  const cov = r.coverage || {};
+  const totals = r.totals || {};
+  const requested = cov.daysRequested || 0;
+  const withData = cov.daysWithData || 0;
+  const pct = requested ? Math.round((withData / requested) * 100) : 0;
+
+  const cards = [
+    { k: 'Acoperire', v: `${withData}/${requested}`, m: `${pct}% zile cu date` },
+    { k: 'Interogări unice', v: nf.format(totals.uniqueQueries || 0), m: `${totals.listedQueries || 0} listate în tabel` },
+    { k: 'Trafic cumulat', v: nfCompact.format(totals.totalTraffic || 0), m: 'sumă de estimări zilnice' },
+    { k: 'Interogări / zi', v: totals.avgQueriesPerDay || '—', m: 'medie pe zilele colectate' },
+    { k: 'Perioada', v: `${r.from} → ${r.to}`, m: r.demo ? 'mod demo' : 'Google Trends' },
+  ];
+
+  $('#rangeStats').innerHTML = cards
+    .map(
+      (c) => `<div class="stat"><div class="k">${esc(c.k)}</div><div class="v">${esc(c.v)}</div><div class="m">${esc(c.m)}</div></div>`,
+    )
+    .join('');
+}
+
+function categoryMeta(r) {
+  const map = new Map();
+  for (const c of r.categories || []) map.set(c.id, c);
+  return map;
+}
+
+function renderCategoryChips(r) {
+  const meta = categoryMeta(r);
+  const chips = (r.categories || [])
+    .map((c) => {
+      const off = range.excluded.has(c.id);
+      return `<button class="cat-chip ${off ? 'off' : 'on'}" data-cat="${esc(c.id)}" title="${
+        off ? 'Click ca să includă' : 'Click ca să excludă'
+      }">${esc(c.emoji)} ${esc(c.label)} <span class="cnt">${nf.format(c.queries)}</span></button>`;
+    })
+    .join('');
+  $('#rCats').innerHTML = chips;
+
+  document.querySelectorAll('#rCats .cat-chip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.cat;
+      if (range.excluded.has(id)) range.excluded.delete(id);
+      else range.excluded.add(id);
+      renderCategoryChips(r);
+      renderTable();
+    });
+  });
+}
+
+function renderCategoryBars(r) {
+  const cats = r.categories || [];
+  const max = Math.max(1, ...cats.map((c) => c.totalTraffic));
+  $('#catBars').innerHTML = cats
+    .map(
+      (c) => `
+      <div class="cat-bar">
+        <span class="name">${esc(c.emoji)} ${esc(c.label)}</span>
+        <span class="track"><span class="fill" style="width:${Math.max(2, Math.round((c.totalTraffic / max) * 100))}%"></span></span>
+        <span class="val">${nf.format(c.queries)} · ${nfCompact.format(c.totalTraffic)}</span>
+      </div>`,
+    )
+    .join('');
+  $('#catSub').textContent = `${cats.length} categorii detectate`;
+}
+
+function filteredRows() {
+  const r = range.result;
+  if (!r) return [];
+  let rows = (r.rows || []).filter((x) => !range.excluded.has(x.category));
+  if (range.minDays > 1) rows = rows.filter((x) => x.days >= range.minDays);
+  if (range.search) rows = rows.filter((x) => x.query.toLowerCase().includes(range.search));
+
+  const by = range.sort;
+  rows = [...rows];
+  if (by === 'days') rows.sort((a, b) => b.days - a.days || b.totalTraffic - a.totalTraffic);
+  else if (by === 'bestRank') rows.sort((a, b) => a.bestRank - b.bestRank || b.totalTraffic - a.totalTraffic);
+  else if (by === 'alpha') rows.sort((a, b) => a.query.localeCompare(b.query, 'ro'));
+  else rows.sort((a, b) => b.totalTraffic - a.totalTraffic || b.days - a.days);
+
+  return rows;
+}
+
+function sparkMini(series) {
+  if (!Array.isArray(series) || series.length < 2) return '';
+  const w = 80;
+  const h = 20;
+  const max = Math.max(1, ...series);
+  const step = w / (series.length - 1);
+  const pts = series
+    .map((v, i) => `${(i * step).toFixed(1)},${(h - 2 - (v / max) * (h - 4)).toFixed(1)}`)
+    .join(' ');
+  return `<svg class="spark-mini" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="#ff8a3d" stroke-width="1.6" /></svg>`;
+}
+
+function renderTable() {
+  const r = range.result;
+  if (!r) return;
+
+  const rows = filteredRows();
+  const meta = categoryMeta(r);
+  const shown = rows.slice(0, range.shown);
+
+  $('#rBody').innerHTML = shown
+    .map((x, i) => {
+      const c = meta.get(x.category) || { label: 'Altele', emoji: '📦' };
+      return `<tr>
+        <td class="col-n">${i + 1}</td>
+        <td class="rq">${esc(x.query)}</td>
+        <td><span class="badge-cat">${esc(c.emoji)} ${esc(c.label)}</span></td>
+        <td class="col-num">${x.days}</td>
+        <td class="col-num">${nfCompact.format(x.totalTraffic)}</td>
+        <td class="col-num">#${x.bestRank}</td>
+        <td class="col-date">${esc(x.firstSeen)}</td>
+        <td class="col-date">${esc(x.lastSeen)}</td>
+        <td>${sparkMini(x.series)}</td>
+      </tr>`;
+    })
+    .join('');
+
+  if (!rows.length) {
+    $('#rBody').innerHTML = '<tr><td colspan="9" class="empty" style="padding:18px">Nicio interogare pentru filtrele curente.</td></tr>';
+  }
+
+  $('#rCount').textContent = `${nf.format(rows.length)} interogări după filtre${rows.length > shown.length ? ` · afișate ${nf.format(shown.length)}` : ''}`;
+  $('#rMore').classList.toggle('hidden', rows.length <= shown.length);
+}
+
+/* ---------------- export perioadă ---------------- */
+
+function exportRangeJson() {
+  const r = range.result;
+  if (!r) return;
+  download(`youtube-tabel-${r.geo}-${r.from}_${r.to}.json`, JSON.stringify(r, null, 2), 'application/json');
+}
+
+function exportRangeCsv() {
+  const r = range.result;
+  if (!r) return;
+  const rows = filteredRows();
+  const meta = categoryMeta(r);
+  const lines = ['loc,interogare,categorie,zile_aparitie,trafic_cumulat_estimat,loc_minim,prima_zi,ultima_zi,consistenta'];
+  rows.forEach((x, i) => {
+    const c = meta.get(x.category);
+    lines.push(
+      [
+        i + 1,
+        csvCell(x.query),
+        csvCell(c ? c.label : 'Altele'),
+        x.days,
+        x.totalTraffic,
+        x.bestRank,
+        x.firstSeen,
+        x.lastSeen,
+        x.consistency,
+      ].join(','),
+    );
+  });
+  download(`youtube-tabel-${r.geo}-${r.from}_${r.to}.csv`, `\uFEFF${lines.join('\n')}`, 'text/csv;charset=utf-8');
 }
 
 init();

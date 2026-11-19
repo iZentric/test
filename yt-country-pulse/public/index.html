@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YouTube Country Pulse — ce a căutat o țară într-o zi</title>
+  <title>YouTube Country Pulse — ce a căutat o țară pe YouTube</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>" />
 </head>
@@ -13,97 +13,234 @@
       <span class="brand-mark" aria-hidden="true">▶</span>
       <div>
         <h1>YouTube Country Pulse</h1>
-        <p class="sub">Ce a căutat o țară pe YouTube într-o zi — căutări în trend, videoclipuri și interes pe cuvinte.</p>
+        <p class="sub">Ce a căutat o țară pe YouTube — o zi sau tot anul, în tabel, pe categorii.</p>
       </div>
     </div>
     <div class="topbar-right">
       <span id="modePill" class="pill pill-idle">în așteptare</span>
       <button id="exportJson" class="btn btn-ghost" title="Descarcă răspunsul complet ca JSON">JSON</button>
-      <button id="exportCsv" class="btn btn-ghost" title="Descarcă tabelele ca CSV">CSV</button>
+      <button id="exportCsv" class="btn btn-ghost" title="Descarcă tabelul ca CSV">CSV</button>
     </div>
   </header>
 
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="day" role="tab" aria-selected="true">O zi</button>
+    <button class="tab" data-tab="range" role="tab" aria-selected="false">Tabel pe perioadă</button>
+  </nav>
+
   <main>
-    <section class="panel controls" aria-label="Filtre">
-      <div class="field">
-        <label for="country">Țara</label>
-        <select id="country"></select>
-      </div>
-      <div class="field">
-        <label for="date">Ziua</label>
-        <input id="date" type="date" />
-      </div>
-      <div class="field field-wide">
-        <label for="seed">Cuvânt de urmărit pe YouTube Search <span class="hint">(opțional)</span></label>
-        <input id="seed" type="text" placeholder="ex: vremea, alegeri, fotbal" autocomplete="off" />
-      </div>
-      <div class="field field-actions">
-        <button id="load" class="btn btn-primary">Încarcă</button>
-      </div>
-      <details class="advanced">
-        <summary>Setări avansate</summary>
-        <div class="advanced-body">
-          <div class="field">
-            <label for="apiKey">Cheie YouTube Data API v3 <span class="hint">(rămâne doar în browserul tău)</span></label>
-            <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
+    <!-- ================= O ZI ================= -->
+    <div id="view-day" class="view">
+      <section class="panel controls" aria-label="Filtre">
+        <div class="field">
+          <label for="country">Țara</label>
+          <select id="country"></select>
+        </div>
+        <div class="field">
+          <label for="date">Ziua</label>
+          <input id="date" type="date" />
+        </div>
+        <div class="field field-wide">
+          <label for="seed">Cuvânt de urmărit pe YouTube Search <span class="hint">(opțional)</span></label>
+          <input id="seed" type="text" placeholder="ex: vremea, alegeri, fotbal" autocomplete="off" />
+        </div>
+        <div class="field field-actions">
+          <button id="load" class="btn btn-primary">Încarcă</button>
+        </div>
+        <details class="advanced">
+          <summary>Setări avansate</summary>
+          <div class="advanced-body">
+            <div class="field">
+              <label for="apiKey">Cheie YouTube Data API v3 <span class="hint">(rămâne doar în browserul tău)</span></label>
+              <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
+            </div>
+            <label class="check">
+              <input id="demo" type="checkbox" />
+              <span>Mod demo (date eșantion, fără cereri către Google)</span>
+            </label>
           </div>
-          <label class="check">
-            <input id="demo" type="checkbox" />
-            <span>Mod demo (date eșantion, fără cereri către Google)</span>
+        </details>
+      </section>
+
+      <section id="warnings" class="warnings hidden" aria-live="polite"></section>
+      <section class="stats" id="stats"></section>
+
+      <section class="grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Videoclipuri în trend</h2>
+            <span class="panel-sub" id="videosSub">—</span>
+          </div>
+          <div id="videos" class="videos"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Căutări în trend</h2>
+            <span class="panel-sub" id="searchesSub">—</span>
+          </div>
+          <div id="searches" class="searches"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="seedPanel">
+        <div class="panel-head">
+          <h2>Interes YouTube Search</h2>
+          <span class="panel-sub" id="seedSub">introdu un cuvânt ca să vezi seria</span>
+        </div>
+        <div id="seedBody" class="seed-body">
+          <p class="empty">Scrie un cuvânt în câmpul de sus (ex. <code>vremea</code>) ca să vezi cum a evoluat interesul pe YouTube Search în ziua aleasă, plus interogările asociate.</p>
+        </div>
+      </section>
+
+      <section class="panel sources">
+        <div class="panel-head">
+          <h2>Surse & transparență</h2>
+          <span class="panel-sub" id="generatedAt"></span>
+        </div>
+        <div id="sources" class="source-list"></div>
+        <p class="disclaimer">
+          YouTube nu publică lista completă a tuturor căutărilor făcute într-o țară într-o zi — nu există public.
+          Acest tool combină cele două surse reale disponibile: <strong>trend-uri zilnice</strong> (Google Trends, endpoint public
+          folosit și de site-ul lor) și <strong>videoclipurile în trend</strong> (YouTube Data API, oficial), plus interesul pe
+          un cuvânt anume în filtrul <em>YouTube Search</em>.
+        </p>
+      </section>
+    </div>
+
+    <!-- ================= TABEL PE PERIOADA ================= -->
+    <div id="view-range" class="view hidden">
+      <section class="panel controls">
+        <div class="field">
+          <label for="rCountry">Țara</label>
+          <select id="rCountry"></select>
+        </div>
+        <div class="field">
+          <label for="rFrom">De la</label>
+          <input id="rFrom" type="date" />
+        </div>
+        <div class="field">
+          <label for="rTo">Până la</label>
+          <input id="rTo" type="date" />
+        </div>
+        <div class="field field-actions">
+          <button id="collectBtn" class="btn btn-primary">Colectează</button>
+        </div>
+        <div class="presets">
+          <span class="presets-label">Scurtături:</span>
+          <button class="chip-btn" data-days="7">7 zile</button>
+          <button class="chip-btn" data-days="30">luna asta</button>
+          <button class="chip-btn" data-days="90">90 zile</button>
+          <button class="chip-btn" data-days="365">ultimul an</button>
+          <label class="check check-inline">
+            <input id="rDemo" type="checkbox" />
+            <span>demo</span>
           </label>
         </div>
-      </details>
-    </section>
+      </section>
 
-    <section id="warnings" class="warnings hidden" aria-live="polite"></section>
-
-    <section class="stats" id="stats"></section>
-
-    <section class="grid">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Videoclipuri în trend</h2>
-          <span class="panel-sub" id="videosSub">—</span>
+      <section id="jobBar" class="panel jobbar hidden">
+        <div class="jobbar-top">
+          <strong id="jobTitle">Colectare…</strong>
+          <button id="cancelJob" class="btn btn-ghost">Anulează</button>
         </div>
-        <div id="videos" class="videos"></div>
-      </div>
+        <div class="bar"><div id="jobFill" class="bar-fill"></div></div>
+        <div id="jobText" class="job-text">—</div>
+      </section>
 
-      <div class="panel">
+      <section id="rangeWarnings" class="warnings hidden" aria-live="polite"></section>
+      <section class="stats" id="rangeStats"></section>
+
+      <section class="panel" id="tablePanel">
         <div class="panel-head">
-          <h2>Căutări în trend</h2>
-          <span class="panel-sub" id="searchesSub">—</span>
+          <h2>Tabel interogări</h2>
+          <span class="panel-sub" id="tableSub">—</span>
         </div>
-        <div id="searches" class="searches"></div>
-      </div>
-    </section>
 
-    <section class="panel" id="seedPanel">
-      <div class="panel-head">
-        <h2>Interes YouTube Search</h2>
-        <span class="panel-sub" id="seedSub">introdu un cuvânt ca să vezi seria</span>
-      </div>
-      <div id="seedBody" class="seed-body">
-        <p class="empty">Scrie un cuvânt în câmpul de sus (ex. <code>vremea</code>) ca să vezi cum a evoluat interesul pe YouTube Search în ziua aleasă, plus interogările asociate.</p>
-      </div>
-    </section>
+        <div class="filters">
+          <input id="rSearch" type="text" placeholder="Caută în tabel…" autocomplete="off" class="filter-search" />
+          <select id="rSort" class="filter-sort">
+            <option value="days">Sortează: zile de apariție</option>
+            <option value="traffic">Sortează: trafic cumulat</option>
+            <option value="bestRank">Sortează: cel mai bun loc</option>
+            <option value="alpha">Sortează: alfabetic</option>
+          </select>
+          <select id="rMinDays" class="filter-sort">
+            <option value="1">Toate zilele</option>
+            <option value="3">minim 3 zile</option>
+            <option value="7">minim 7 zile</option>
+            <option value="15">minim 15 zile</option>
+          </select>
+        </div>
 
-    <section class="panel sources">
-      <div class="panel-head">
-        <h2>Surse & transparență</h2>
-        <span class="panel-sub" id="generatedAt"></span>
-      </div>
-      <div id="sources" class="source-list"></div>
-      <p class="disclaimer">
-        YouTube nu publică lista completă a tuturor căutărilor făcute într-o țară într-o zi — nu există public.
-        Acest tool combină cele două surse reale disponibile: <strong>trend-uri zilnice</strong> (Google Trends, endpoint public
-        folosit și de site-ul lor) și <strong>videoclipurile în trend</strong> (YouTube Data API, oficial), plus interesul pe
-        un cuvânt anume în filtrul <em>YouTube Search</em>.
-      </p>
-    </section>
+        <div id="rCats" class="cat-chips"></div>
+
+        <div class="table-wrap">
+          <table class="data-table" id="rTable">
+            <thead>
+              <tr>
+                <th class="col-n">#</th>
+                <th>Interogare</th>
+                <th class="col-cat">Categorie</th>
+                <th class="col-num">Zile</th>
+                <th class="col-num">Trafic cumulat</th>
+                <th class="col-num">Loc minim</th>
+                <th class="col-date">Prima zi</th>
+                <th class="col-date">Ultima zi</th>
+                <th class="col-spark"></th>
+              </tr>
+            </thead>
+            <tbody id="rBody"></tbody>
+          </table>
+        </div>
+        <div class="table-foot">
+          <span id="rCount" class="panel-sub">—</span>
+          <button id="rMore" class="btn btn-ghost hidden">Arată mai multe</button>
+        </div>
+      </section>
+
+      <section class="panel" id="catPanel">
+        <div class="panel-head">
+          <h2>Distribuție pe categorii</h2>
+          <span class="panel-sub" id="catSub">—</span>
+        </div>
+        <div id="catBars" class="cat-bars"></div>
+        <p class="disclaimer">
+          Categoriile sunt deduse automat din cuvintele-cheie (euristică, fără model). Sunt orientative —
+          o interogare precum „românia" sau un nume de om rămâne la „Altele". Filtrele de sus sunt cele care contează:
+          dezactivează „Știri" și „Sport" și vei vedea restul.
+        </p>
+      </section>
+
+      <section class="panel sources">
+        <div class="panel-head">
+          <h2>Ce conține tabelul</h2>
+          <span class="panel-sub" id="rangeGeneratedAt"></span>
+        </div>
+        <div class="source-list">
+          <div class="source">
+            <span class="dot ok"></span>
+            <span>Trend-uri zilnice, zi cu zi<br /><span class="note">Google Trends — până la ~20 de interogări pe zi și pe țară; endpoint public neoficial</span></span>
+            <span class="prov">sursă</span>
+          </div>
+          <div class="source">
+            <span class="dot ok"></span>
+            <span>Agregare + clasificare<br /><span class="note">fiecare interogare apare o dată, cu zilele de apariție, traficul cumulat estimat și cel mai bun loc</span></span>
+            <span class="prov">local</span>
+          </div>
+        </div>
+        <p class="disclaimer">
+          <strong>Limita reală:</strong> Google publică doar top-ul zilei (~20 de interogări), nu toate căutările.
+          Un an întreg înseamnă maximum ~7.300 de intrări brute, care se unifică în câteva mii de interogări unice.
+          „Trafic cumulat" e suma estimărilor zilnice — util pentru comparație între interogări, nu un număr exact de persoane.
+          Colectarea unui an durează câteva minute și merge în fundal; zilele deja luate se cache-uiesc 60 de zile.
+        </p>
+      </section>
+    </div>
   </main>
 
   <footer>
-    <span>Rulează local cu <code>npm start</code> · fără dependințe · date cache-uite 15–30 min</span>
+    <span>Rulează local cu <code>npm start</code> · fără dependințe · cache 15–60 min</span>
     <span id="footGeo"></span>
   </footer>
 

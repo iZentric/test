@@ -26,10 +26,21 @@ function mulberry32(seed) {
 const POOLS = {
   RO: {
     queries: [
-      'vremea mâine', 'rezultatele de azi', 'cât e ceasul', 'știrile românia',
-      'meci românia', 'rețetă ciorbă', 'factura electrica', 'trafic autostrada',
-      'emisiune live', 'cântec nou', 'bancul zilei', 'curs bnr', 'starea vremii',
-      'film românesc', 'interviu', 'podcast românesc',
+      'vremea mâine', 'starea vremii', 'meteo bucurești', 'prognoza 7 zile', 'ninsoare', 'cod galben',
+      'rezultatele de azi', 'știrile românia', 'stiri de ultima ora', 'cutremur', 'accident autostrada',
+      'meci românia', 'fcsb steaua', 'liga 1 clasament', 'românia - austria', 'rezumat meci', 'transferuri',
+      'rețetă ciorbă', 'sarmale rețetă', 'prajitura de casa', 'mâncare rapidă', 'salata de vinete',
+      'factura electrica', 'curs bnr', 'prețul benzinei', 'salariul minim', 'pensii 2026', 'bitcoin',
+      'emisiune live', 'survivor românia', 'masterchef finala', 'vocea româniei', 'podcast românesc',
+      'film românesc', 'serial nou netflix', 'trailer film 2026', 'desene animate dublate',
+      'cântec nou', 'manele noi', 'versuri melodie', 'concert bucurești',
+      'bacalaureat 2026', 'subiecte bac', 'admitere facultate', 'evaluare națională',
+      'loto 6/49', 'joker rezultate', 'pronosticuri pariuri',
+      'iphone 17', 'chatgpt română', 'aplicație bancară', 'internet fibra',
+      'dacia bigster', 'mașini second hand', 'anvelope iarnă', 'rovinieta',
+      'gta 6', 'fifa 26', 'minecraft', 'jocuri noi',
+      'simptome gripă', 'rețetă naturală', 'slăbit rapid',
+      'interviu', 'cât e ceasul', 'bancul zilei', 'trafic autostrada', 'wizz air',
     ],
     channels: ['Știrile PRO', 'Observator Oficial', 'Neața cu Soare', 'Liga Sportivă', 'Bucătăria Mariei', 'Vlog de Week-end'],
     titles: [
@@ -105,7 +116,16 @@ export function demoPulse({ geo, date, seed }) {
   const day = date || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const rand = mulberry32(hashString(`${country.code}|${day}|${seed || ''}`));
 
-  const queries = shuffle(rand, pool.queries).slice(0, 12);
+  const VARIANTS = ['live', 'azi', '2026', 'rezumat', 'explicat', 'video', 'noi'];
+  const queries = shuffle(rand, pool.queries)
+    .slice(0, 20)
+    .map((q, i) => {
+      if (i % 5 === 2) {
+        const variant = VARIANTS[Math.floor(rand() * VARIANTS.length)];
+        return `${q} ${variant}`;
+      }
+      return q;
+    });
   const trendingSearches = queries.map((query, i) => {
     // trafic descrescator, ca la Google Trends (cu zgomot mic, ca sa nu fie liniar)
     const traffic = Math.round((2_000_000 / Math.pow(i + 1.15, 1.05)) * (0.92 + rand() * 0.16));

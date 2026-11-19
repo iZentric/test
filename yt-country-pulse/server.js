@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 import { buildPulse } from './lib/pulse.js';
 import { COUNTRIES } from './lib/countries.js';
+import { createJob, getJob, cancelJob, listJobs, jobMeta } from './lib/jobs.js';
+import { MAX_DAYS, isValidDate } from './lib/collect.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -150,6 +152,77 @@ const server = http.createServer(async (req, res) => {
 
       res.setHeader('access-control-allow-origin', '*');
       sendJson(res, 200, payload);
+      return;
+    }
+
+    // ---------- colectare pe interval (job in fundal) ----------
+    if (url.pathname === '/api/collect' && req.method === 'POST') {
+      if (rateLimited(ip)) {
+        sendJson(res, 429, { ok: false, error: 'Prea multe cereri. Așteaptă un minut.' });
+        return;
+      }
+
+      let body;
+      try {
+        body = JSON.parse((await readBody(req)) || '{}');
+      } catch {
+        sendJson(res, 400, { ok: false, error: 'JSON invalid în body.' });
+        return;
+      }
+
+      const geo = String(body.geo || 'RO').toUpperCase().slice(0, 2);
+      const to = String(body.to || '').slice(0, 10) || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const from = String(body.from || '').slice(0, 10) || new Date(Date.parse(`${to}T00:00:00Z`) - 29 * 86400000).toISOString().slice(0, 10);
+
+      if (!isValidDate(from) || !isValidDate(to)) {
+        sendJson(res, 400, { ok: false, error: 'Datele trebuie să fie în format YYYY-MM-DD.' });
+        return;
+      }
+      if (Date.parse(from) > Date.parse(to)) {
+        sendJson(res, 400, { ok: false, error: 'Data de început e după data de sfârșit.' });
+        return;
+      }
+      const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+      if (span > MAX_DAYS) {
+        sendJson(res, 400, { ok: false, error: `Intervalul maxim e ${MAX_DAYS} de zile (ai cerut ${span}).` });
+        return;
+      }
+
+      const job = createJob({ geo, from, to, demo: Boolean(body.demo) });
+      sendJson(res, 202, { ok: true, jobId: job.id, job: jobMeta(job) });
+      return;
+    }
+
+    if (url.pathname === '/api/jobs' && req.method === 'GET') {
+      sendJson(res, 200, { ok: true, jobs: listJobs() });
+      return;
+    }
+
+    const jobMatch = url.pathname.match(/^\/api\/jobs\/([A-Za-z0-9-]+)(\/cancel)?$/);
+    if (jobMatch) {
+      const job = getJob(jobMatch[1]);
+      if (!job) {
+        sendJson(res, 404, { ok: false, error: 'Job inexistent (sau a fost șters din memorie).' });
+        return;
+      }
+      if (jobMatch[2]) {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'Folosește POST pentru anulare.' });
+          return;
+        }
+        cancelJob(job.id);
+        sendJson(res, 200, { ok: true, job: jobMeta(job) });
+        return;
+      }
+      if (req.method !== 'GET') {
+        sendJson(res, 405, { ok: false, error: 'Metodă nepermisă' });
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        job: jobMeta(job),
+        result: job.status === 'done' || job.status === 'cancelled' ? job.result : null,
+      });
       return;
     }
 
