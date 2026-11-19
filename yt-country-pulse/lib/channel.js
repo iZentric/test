@@ -3,6 +3,7 @@
 // apar în primele rezultate pentru fiecare interogare.
 //
 // Fără cheie API. Fără OAuth. Doar endpoint-ul public pe care îl folosește youtube.com.
+// (Rulează din GitHub Actions — sandbox-ul de dezvoltare nu are acces la Google.)
 
 import { normalizeText } from './text.js';
 import { sleep } from './http.js';
