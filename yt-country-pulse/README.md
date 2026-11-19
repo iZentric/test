@@ -40,6 +40,22 @@ Un click pe **Mod curat** scoate exact lucrurile care nu te interesează:
 Ce rămâne: sport, muzică, film/serial, gaming, vedete, auto, bani, sănătate, vremea, loto — adică subiectele pentru care lumea chiar deschide YouTube.
 Filtrele se salvează în browser și se aplică și în tabel, și în estimare. Butonul **Resetează filtrele** le scoate pe toate.
 
+### 🚫 „Fără stat & dezastre" — varianta strictă
+
+Al doilea preset taie tot ce e influențat de stat, de prețuri sau de evenimente negative:
+
+- **categorii**: Știri, Politică, Educație, Lifestyle, Tehnologie, TV, **Film & Serial**, **Sport**, **Bani & Afaceri**;
+- **subiecte despre țară** (nume, capitală, orașe mari);
+- **cuvinte**: dezastre și accidente (`cutremur, seism, inundații, incendiu, explozie, accident, deces, victime`), instituții și legi (`guvern, minister, parlament, lege, taxă, impozit, buget, ANAF, subvenție, ajutor social, șomaj, rovinietă, amendă`), alegeri (`vot, președinte, ministru, primar, partid, coaliție`), bani și utilități (`preț, benzină, motorină, factură, energie, gaze, pensie, salariu, inflație, curs BNR, bursă, credit, criză`), plus `film, serial, meci, fotbal`.
+
+Rămân: **muzică, gaming, auto, vremea, sănătate, vedete, loto, altele** — adică subiectele pentru care lumea chiar intră pe YouTube, fără „breaking news", fără prețuri, fără politică.
+
+### 📅 Top pe fiecare zi
+
+Panel nou: fiecare zi din interval, cu interogările care au intrat în topul ei, **în ordine după volum**.
+Alege câte afișezi pe zi (5 / 10 / 20), deschide toate zilele dintr-un click, iar lista respectă **exact filtrele active**
+(categorii, subiecte de țară, cuvinte excluse) — deci poți avea „topul zilei" curat, fără știri, fără meciuri, fără prețuri.
+
 ### Ce urmează — estimare, nu ghicit
 
 Două panouri, ambele marcate clar ca estimări:

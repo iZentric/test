@@ -176,6 +176,7 @@
 
         <div class="filters filters-secondary">
           <button id="cleanMode" class="chip-btn chip-clean" title="Scoate știrile, politica, educația (bac), mâncarea, aplicațiile, emisiunile și subiectele despre țară">🧹 Mod curat</button>
+          <button id="strictMode" class="chip-btn chip-strict" title="Scoate tot ce ține de stat (legi, taxe, prețuri, benzină, pensii, facturi), dezastre (cutremur, incendiu, accident), filme, sport și știri">🚫 Fără stat & dezastre</button>
           <label class="check check-inline">
             <input id="hideCountry" type="checkbox" />
             <span>Ascunde subiectele despre <strong id="countryLabel">țară</strong></span>
@@ -208,6 +209,32 @@
           <span id="rCount" class="panel-sub">—</span>
           <button id="rMore" class="btn btn-ghost hidden">Arată mai multe</button>
         </div>
+      </section>
+
+      <section class="panel" id="dayTopPanel">
+        <div class="panel-head">
+          <h2>Top pe fiecare zi</h2>
+          <span class="panel-sub" id="dayTopSub">—</span>
+        </div>
+        <div class="filters">
+          <label class="check check-inline">
+            <span>Câte pe zi:</span>
+            <select id="dayTopN" class="filter-sort filter-narrow">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
+            </select>
+          </label>
+          <label class="check check-inline">
+            <input id="dayTopOpen" type="checkbox" />
+            <span>deschide toate zilele</span>
+          </label>
+        </div>
+        <div id="dayTopBody" class="day-top"></div>
+        <p class="disclaimer">
+          Fiecare zi, cu interogările care au intrat în topul zilei, după filtrele active din tabel
+          (categorii, subiecte de țară, cuvinte excluse). Ordinea din zi e după volumul estimat de Google Trends.
+        </p>
       </section>
 
       <section class="panel" id="forecastPanel">

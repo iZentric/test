@@ -495,6 +495,26 @@ const CLEAN_WORDS = [
   'reteta', 'retete', 'restaurant', 'fast food', 'meniu', 'stiri', 'breaking',
 ];
 
+// Tot ce tine de stat, bani publici, preturi reglementate si dezastre.
+const STATE_CATEGORIES = ['news', 'politics', 'education', 'lifestyle', 'tech', 'tv', 'film', 'sport', 'money'];
+const STATE_WORDS = [
+  // dezastre / accidente
+  'cutremur', 'seism', 'inundat', 'incendiu', 'explozie', 'accident', 'deces', 'morti', 'raniti', 'victime',
+  'alerta', 'evacuare', 'dezastru',
+  // stat / legi / institutii
+  'guvern', 'minister', 'parlament', 'senat', 'lege', 'legi', 'ordonanta', 'impozit', 'taxa', 'taxe',
+  'buget', 'anaf', 'subventie', 'ajutor social', 'somaj', 'somer', 'rovinieta', 'amenda', 'politie',
+  'dna', 'tribunal', 'proces', 'dosar',
+  // alegeri
+  'alegeri', 'vot', 'votul', 'presedinte', 'ministru', 'primar', 'partid', 'coalitie', 'candidat', 'sondaj',
+  // preturi / bani / utilitati
+  'pret', 'preturi', 'scumpire', 'scumpiri', 'benzina', 'motorina', 'combustibil', 'factura', 'facturi',
+  'energie', 'gaze', 'curent', 'pensie', 'pensii', 'salariu', 'salarii', 'inflatie', 'curs bnr', 'bursa',
+  'credit', 'ipoteca', 'criza', 'razboi', 'ucraina', 'rusia',
+  // filme / meciuri
+  'film', 'filme', 'serial', 'meci', 'meciul', 'fotbal',
+];
+
 function normalizeText(value) {
   return String(value || '')
     .toLowerCase()
@@ -624,7 +644,9 @@ async function initRange() {
   $('#rMore').addEventListener('click', () => {
     range.shown += 300;
     renderTable();
-    });
+  });
+  $('#dayTopN').addEventListener('change', renderDayTop);
+  $('#dayTopOpen').addEventListener('change', renderDayTop);
 
   // filtre salvate
   try {
@@ -633,10 +655,11 @@ async function initRange() {
       range.excluded = new Set(savedFilters.excluded || []);
       range.hideCountry = Boolean(savedFilters.hideCountry);
       range.excludeWords = savedFilters.excludeWords || [];
-      range.cleanMode = Boolean(savedFilters.cleanMode);
+      range.cleanMode = savedFilters.cleanMode || false;
       $('#hideCountry').checked = range.hideCountry;
       $('#excludeWords').value = range.excludeWords.join(', ');
-      $('#cleanMode').classList.toggle('active', range.cleanMode);
+      $('#cleanMode').classList.toggle('active', range.cleanMode === 'soft');
+      $('#strictMode').classList.toggle('active', range.cleanMode === 'strict');
       if (savedFilters.sort) {
         range.sort = savedFilters.sort;
         $('#rSort').value = savedFilters.sort;
@@ -665,7 +688,8 @@ async function initRange() {
     refreshFiltered();
   });
 
-  $('#cleanMode').addEventListener('click', () => applyCleanMode(!range.cleanMode));
+  $('#cleanMode').addEventListener('click', () => applyCleanMode(range.cleanMode === 'soft' ? false : 'soft'));
+  $('#strictMode').addEventListener('click', () => applyCleanMode(range.cleanMode === 'strict' ? false : 'strict'));
   $('#resetFilters').addEventListener('click', resetFilters);
   $('#rCountry').addEventListener('change', () => {
     updateCountryLabel();
@@ -698,20 +722,27 @@ function persistFilters() {
   );
 }
 
-function applyCleanMode(on) {
-  range.cleanMode = on;
-  if (on) {
+function applyCleanMode(mode) {
+  range.cleanMode = mode || false;
+
+  if (range.cleanMode === 'soft') {
     range.excluded = new Set(CLEAN_CATEGORIES);
     range.hideCountry = true;
     range.excludeWords = [...CLEAN_WORDS];
+  } else if (range.cleanMode === 'strict') {
+    range.excluded = new Set(STATE_CATEGORIES);
+    range.hideCountry = true;
+    range.excludeWords = [...CLEAN_WORDS, ...STATE_WORDS];
   } else {
     range.excluded = new Set();
     range.hideCountry = false;
     range.excludeWords = [];
   }
+
   $('#hideCountry').checked = range.hideCountry;
   $('#excludeWords').value = range.excludeWords.join(', ');
-  $('#cleanMode').classList.toggle('active', on);
+  $('#cleanMode').classList.toggle('active', range.cleanMode === 'soft');
+  $('#strictMode').classList.toggle('active', range.cleanMode === 'strict');
   persistFilters();
   refreshFiltered();
   if (range.result) renderCategoryChips(range.result);
@@ -729,6 +760,7 @@ function resetFilters() {
   $('#hideCountry').checked = false;
   $('#excludeWords').value = '';
   $('#cleanMode').classList.remove('active');
+  $('#strictMode').classList.remove('active');
   $('#rSearch').value = '';
   $('#rMinDays').value = '1';
   $('#rSort').value = 'days';
@@ -741,6 +773,7 @@ function refreshFiltered() {
   range.shown = 300;
   if (range.result) {
     renderTable();
+    renderDayTop();
     renderForecast();
   }
 }
@@ -949,6 +982,7 @@ function renderRange() {
   renderCategoryChips(r);
   renderCategoryBars(r);
   renderTable();
+  renderDayTop();
   renderForecast();
 
   $('#tableSub').textContent = `${r.from} → ${r.to} · ${cov.daysWithData || 0} zile cu date`;
@@ -1025,17 +1059,17 @@ function renderCategoryBars(r) {
   $('#catSub').textContent = `${cats.length} categorii detectate`;
 }
 
+function passesFilters(query, category) {
+  if (range.excluded.has(category)) return false;
+  if (range.hideCountry && containsAny(query, currentCountryTerms())) return false;
+  if (range.excludeWords.length && containsAny(query, range.excludeWords)) return false;
+  return true;
+}
+
 function filteredRows() {
   const r = range.result;
   if (!r) return [];
-  let rows = (r.rows || []).filter((x) => !range.excluded.has(x.category));
-  if (range.hideCountry) {
-    const terms = currentCountryTerms();
-    rows = rows.filter((x) => !containsAny(x.query, terms));
-  }
-  if (range.excludeWords.length) {
-    rows = rows.filter((x) => !containsAny(x.query, range.excludeWords));
-  }
+  let rows = (r.rows || []).filter((x) => passesFilters(x.query, x.category));
   if (range.minDays > 1) rows = rows.filter((x) => x.days >= range.minDays);
   if (range.search) rows = rows.filter((x) => x.query.toLowerCase().includes(range.search));
 
@@ -1092,6 +1126,64 @@ function renderTable() {
 
   $('#rCount').textContent = `${nf.format(rows.length)} interogări după filtre${rows.length > shown.length ? ` · afișate ${nf.format(shown.length)}` : ''}`;
   $('#rMore').classList.toggle('hidden', rows.length <= shown.length);
+}
+
+/* ---------------- top pe fiecare zi ---------------- */
+
+function renderDayTop() {
+  const r = range.result;
+  const box = $('#dayTopBody');
+  const sub = $('#dayTopSub');
+
+  if (!r) {
+    box.innerHTML = '<p class="empty">Colectează o perioadă ca să vezi topul fiecărei zile.</p>';
+    sub.textContent = '—';
+    return;
+  }
+
+  const perDay = Number($('#dayTopN').value) || 10;
+  const openAll = $('#dayTopOpen').checked;
+  const meta = categoryMeta(r);
+
+  const days = [...(r.days || [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 120);
+  const blocks = [];
+
+  for (const day of days) {
+    const items = (day.items || [])
+      .filter((it) => passesFilters(it.query, it.category))
+      .sort((a, b) => (b.trafficValue || 0) - (a.trafficValue || 0) || (a.rank || 99) - (b.rank || 99));
+
+    if (!items.length) continue;
+
+    const top = items.slice(0, perDay);
+    const peek = top.slice(0, 3).map((t) => t.query).join(' · ');
+    const list = top
+      .map((t) => {
+        const c = meta.get(t.category) || { label: 'Altele', emoji: '📦' };
+        return `<li>${esc(t.query)}<span class="cat">${esc(c.emoji)} ${esc(c.label)}</span>${
+          t.trafficLabel ? `<span class="t">${esc(t.trafficLabel)}</span>` : ''
+        }</li>`;
+      })
+      .join('');
+
+    blocks.push(`<details class="day-block" ${openAll ? 'open' : ''}>
+      <summary>
+        <span class="d">${esc(day.date.split('-').reverse().join('.'))}</span>
+        <span class="n">${items.length} după filtre</span>
+        <span class="peek">${esc(peek)}</span>
+      </summary>
+      <ol class="day-list">${list}</ol>
+    </details>`);
+  }
+
+  if (!blocks.length) {
+    box.innerHTML = '<p class="empty">Nicio interogare nu trece filtrele în perioada colectată. Încearcă să oprești „Mod curat" sau să lungești intervalul.</p>';
+    sub.textContent = '0 zile';
+    return;
+  }
+
+  box.innerHTML = blocks.join('');
+  sub.textContent = `${blocks.length} zile · top ${perDay} pe zi după filtre`;
 }
 
 /* ---------------- estimare (momentum) ---------------- */
