@@ -3,6 +3,8 @@ on:
   push:
     branches: ['arena/**']
   workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * *'   # zilnic, 04:17 UTC — datele reale se reîmprospătează
 
 concurrency:
   group: harvest-ro-${{ github.ref }}
