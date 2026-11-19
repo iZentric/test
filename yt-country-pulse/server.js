@@ -19,6 +19,8 @@ import {
 import { createJob, getJob, cancelJob, listJobs, jobMeta } from './lib/jobs.js';
 import { MAX_DAYS, isValidDate } from './lib/collect.js';
 
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT || 3000);
@@ -191,6 +193,19 @@ const server = http.createServer(async (req, res) => {
             }
           : null,
       });
+      return;
+    }
+
+    // ---------- ce căutări reale aduc canalul în rezultate ----------
+    if (url.pathname === '/api/channel/latest' && req.method === 'GET') {
+      const geo = String(url.searchParams.get('geo') || 'RO').toUpperCase().slice(0, 2);
+      let data = null;
+      try {
+        data = JSON.parse(await readFile(path.join(DATA_DIR, 'channel', `latest-${geo}.json`), 'utf8'));
+      } catch {
+        data = null;
+      }
+      sendJson(res, 200, { ok: true, geo, latest: data });
       return;
     }
 

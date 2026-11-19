@@ -29,6 +29,11 @@ jobs:
         run: |
           node -v
           node cli.js --harvest --geo RO --depth 2 --top 40 --json /tmp/harvest.json
+      - name: Ce căutări reale aduc canalul în rezultate (live)
+        working-directory: yt-country-pulse
+        continue-on-error: true
+        run: |
+          node cli.js --channel-match --geo RO --max 120 --delay 400 --top 40 --out data/channel/latest-RO.json
       - name: Sumar în job summary
         if: always()
         run: |
@@ -45,8 +50,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          ls -la yt-country-pulse/data/harvest || true
+          ls -la yt-country-pulse/data/harvest yt-country-pulse/data/channel || true
           git add -f yt-country-pulse/data/harvest/latest-RO.json
+          git add -f yt-country-pulse/data/channel/latest-RO.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "nicio schimbare"
           else

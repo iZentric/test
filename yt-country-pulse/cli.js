@@ -7,13 +7,14 @@
 //   node cli.js --geo US --demo --json out.json
 //   node cli.js --geo RO --csv > pulse.csv
 
-import { writeFile } from 'node:fs/promises';
+import { writeFile, readFile } from 'node:fs/promises';
 import { buildPulse } from './lib/pulse.js';
 import { COUNTRIES, countryOf } from './lib/countries.js';
 import { collectRange, dateRange } from './lib/collect.js';
 import { aggregate } from './lib/aggregate.js';
 import { CATEGORIES, categoryLabel } from './lib/classify.js';
 import { harvest } from './lib/harvest.js';
+import { matchChannel, pickQueries } from './lib/channel.js';
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -52,6 +53,14 @@ YouTube Country Pulse — CLI
   --depth <1|2>     Niveluri de expandare pentru --harvest          [default: 2]
   --expand <n>      Câți termeni reinterogați la nivelul 2           [default: 40]
   --seeds <listă>   Prefixe suplimentare (virgulă) pentru --harvest
+
+  --channel-match   Ce căutări reale din țară aduc canalul X în rezultate
+  --target <fișier> JSON cu canalul: name, names[], videoIds[], keywords[], titles[], queries[]
+                    [default: config/channel-target.json]
+  --queries <fișier>  Rezultatul harvestului din care se aleg interogările de testat
+                    [default: data/harvest/latest-RO.json]
+  --max <n>         Câte interogări să testeze                  [default: 150]
+  --delay <ms>      Pauză între cereri                          [default: 350]
 
   --range <zile>    Colectează ultimele N zile (ex. 30, 365) și agregă tabelul
   --from <data>     Începutul intervalului (YYYY-MM-DD)
@@ -96,6 +105,11 @@ async function main() {
 
   if (args.harvest) {
     await runHarvestCli(args);
+    return;
+  }
+
+  if (args['channel-match']) {
+    await runChannelMatchCli(args);
     return;
   }
 
@@ -276,6 +290,70 @@ async function runRange(args) {
   }
 }
 
+
+async function runChannelMatchCli(args) {
+  const geo = String(args.geo || 'RO').toUpperCase();
+  const hl = String(args.hl || 'ro').toLowerCase();
+  const targetPath = String(args.target || 'config/channel-target.json');
+  const queriesPath = String(args.queries || `data/harvest/latest-${geo}.json`);
+  const outPath = String(args.out || `data/channel/latest-${geo}.json`);
+  const max = Number(args.max) || 150;
+  const delayMs = Number(args.delay) || 350;
+
+  const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
+  let target;
+  let harvestData;
+  try {
+    target = await readJson(targetPath);
+  } catch (err) {
+    console.error(`Nu pot citi ținta (${targetPath}): ${err.message}`);
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    harvestData = await readJson(queriesPath);
+  } catch {
+    harvestData = { terms: [] };
+    console.error(`(fără ${queriesPath} — testez doar interogările din țintă)`);
+  }
+
+  const queries = pickQueries(harvestData.terms || [], target, { limit: max });
+  if (!queries.length) {
+    console.error('Nicio interogare de testat. Rulează întâi --harvest sau pune queries[] în țintă.');
+    process.exitCode = 1;
+    return;
+  }
+
+  console.error(`Testez ${queries.length} interogări pentru „${target.name || '(canal)'}" în ${geo}…`);
+  const result = await matchChannel({
+    queries,
+    target,
+    geo,
+    hl,
+    limit: max,
+    delayMs,
+    log: (m) => console.error(m),
+    onProgress: (p) => {
+      if (p.index % 10 === 0 || p.index === p.total) {
+        process.stderr.write(`\r  ${p.index}/${p.total} · ${p.matched} potriviri   `);
+      }
+    },
+  });
+  process.stderr.write('\n');
+
+  const s = result.stats;
+  console.log('');
+  console.log(`  CANAL ${target.name || '—'}  ·  ${s.queriesTested} interogări  ·  ${s.matched} potriviri  ·  ${s.matchedTop3} în top 3  ·  ${Math.round(s.durationMs / 1000)}s`);
+  console.log('  ' + '─'.repeat(78));
+  result.matches.slice(0, Number(args.top) || 40).forEach((m) => {
+    console.log(`  #${String(m.position).padStart(2)}  ${m.query.slice(0, 42).padEnd(42)} ${m.via === 'video' ? 'videoclip' : 'canal'}  ${m.title.slice(0, 40)}`);
+  });
+  if (s.errors) console.log(`  (${s.errors} cereri au eșuat)`);
+  console.log('');
+
+  await writeFile(outPath, JSON.stringify(result, null, 2), 'utf8');
+  console.error(`JSON scris în ${outPath}`);
+}
 
 function csvOfHarvest(terms) {
   const lines = ['loc,termen,scor,aparitiI,cel_mai_bun_loc,medie_loc,surse,nou'];
