@@ -7,7 +7,8 @@
 //   node cli.js --geo US --demo --json out.json
 //   node cli.js --geo RO --csv > pulse.csv
 
-import { writeFile, readFile } from 'node:fs/promises';
+import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import path from 'node:path';
 import { buildPulse } from './lib/pulse.js';
 import { COUNTRIES, countryOf } from './lib/countries.js';
 import { collectRange, dateRange } from './lib/collect.js';
@@ -351,6 +352,7 @@ async function runChannelMatchCli(args) {
   if (s.errors) console.log(`  (${s.errors} cereri au eșuat)`);
   console.log('');
 
+  await mkdir(path.dirname(path.resolve(outPath)), { recursive: true });
   await writeFile(outPath, JSON.stringify(result, null, 2), 'utf8');
   console.error(`JSON scris în ${outPath}`);
 }
