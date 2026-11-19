@@ -51,6 +51,25 @@ Asta e tot ce se poate spune onest despre „ce se va căuta luna viitoare": **m
 
 ---
 
+## Sugestii (autocomplete) — „lista fără să scriu eu cuvinte"
+
+Tab nou care întoarce **lista de sugestii reale** pe care le dă bara de căutare YouTube, ordonată, fără să introduci tu termeni:
+
+- **93 de prefixe** interogate automat: `a–z`, `0–9`, `ă â î ș ț` și întrebări de tipul `cum`, `ce`, `cine`, `unde`, `când`, `cât`, `care`, `de ce`, `pentru`, `cel mai`, `top`;
+- **nivelul 2 (expandare)**: cei mai promițători ~40 de termeni descoperiți sunt reinterogați, ceea ce face ca același termen să apară din mai multe direcții — abia atunci se poate calcula un clasament;
+- **scor** = 0,65 × (pondere poziție) + 0,35 × (din câte prefixe diferite apare). Poziția 0 (prima sugestie) cântărește cel mai mult; contribuțiile din nivelul 2 sunt subponderate, iar extensiile directe ale prefixului (`gta 6` → `gta 6 2026`) sunt penalizate;
+- **diferență între rulări**: termenii care nu erau în rularea anterioară primesc badge **NOU** — așa vezi ce a apărut în peisaj;
+- filtre: căutare text, sortare (scor / apariții / alfabetic / noi întâi), „doar termeni noi", export **CSV/JSON**.
+
+Rulare: ~50–100 de cereri, 40–90 de secunde. Pauze între cereri (220 ms + jitter), cache 6 h, retry pe 429, anulare, progres în timp real.
+
+### Ce NU e (ca să fim drepți)
+
+- **Nu e volum de căutări.** Autocomplete-ul nu publică cifre. Scorul e un proxy (poziție × acoperire între prefixe), bun pentru ordonare relativă, nu pentru „X căutări/lună".
+- **Nu e lista completă.** Google nu expune nicio listă cu toate căutările — nici oficial, nici prin acest endpoint. Ce vezi e universul de sugestii pentru prefixele cerute.
+- **`q=` gol nu întoarce nimic.** Ideea că un query gol îți dă „top 10 căutări" e falsă; se vede și în dump-ul de referință (`[GLOBAL_EMPTY_Q] -> ` gol).
+- Endpoint public, neoficial, fără autentificare. Uz personal / cercetare, cu pauze. Nu e „hack", dar nici garantat stabil.
+
 ## Ce e posibil și ce nu (important)
 
 Google **nu** publică o listă completă de tipul „toate căutările făcute pe YouTube în România". Nu există API, dataset sau endpoint public pentru asta — nici oficial, nici „pe sub masă". Ce există e **top-ul zilei**: ~20 de interogări pe zi și pe țară.
@@ -113,7 +132,16 @@ node cli.js --geo RO --from 2026-01-01 --to 2026-11-18 --exclude news,sport --ou
 node cli.js --geo RO --range 365 --demo --json an.json
 ```
 
-Flag-uri: `--range`, `--from`, `--to`, `--exclude` (id-uri de categorii), `--top`, `--out` (CSV), `--json`, `--demo`, `--limit`, `--list`.
+Sugestii (autocomplete):
+
+```bash
+node cli.js --geo RO --harvest --top 50
+node cli.js --geo RO --harvest --depth 2 --expand 40 --seeds "gta,insula,colinde"
+node cli.js --geo RO --harvest --csv > sugestii.csv
+```
+
+Flag-uri: `--range`, `--from`, `--to`, `--exclude` (id-uri de categorii), `--top`, `--out` (CSV), `--json`, `--demo`, `--limit`, `--list`,
+`--harvest`, `--depth`, `--expand`, `--seeds`.
 
 ---
 
@@ -163,6 +191,13 @@ Flag-uri: `--range`, `--from`, `--to`, `--exclude` (id-uri de categorii), `--top
 
 `GET /api/events?geo=RO&days=75` → `{ ok: true, events: [{ date, name, kind, kindLabel, keywords, why, approx, daysUntil }] }`
 
+### Sugestii (autocomplete)
+
+`POST /api/harvest` → `{ geo, hl, depth, extraSeeds[], demo }` → `202 { jobId }`
+`GET /api/harvest/:id` → `{ job: { status, progress, stats }, result: { terms: [{ term, score, appearances, bestRank, avgRank, seeds, isNew }] } }`
+`GET /api/harvest/latest?geo=RO` → ultima rulare salvată (pentru diff și afișare)
+`POST /api/harvest/:id/cancel`
+
 Alte rute: `GET /api/health`, `GET /api/countries` (include `terms` — numele țării, capitala, aliasurile, pentru filtrul „ascunde subiectele despre țară"), `GET /api/pulse?geo=RO&demo=1`.
 
 ---
@@ -181,6 +216,8 @@ yt-country-pulse/
 │   ├── aggregate.js     # unificare interogări + metrici + serii
 │   ├── classify.js      # categorii pe cuvinte-cheie (RO+EN), 17 categorii
 │   ├── events.js        # evenimente recurente (Paște calculat, Black Friday, sărbători)
+│   ├── suggest.js       # client autocomplete YouTube (JSONP, encoding tolerant)
+│   ├── harvest.js       # crawler 2 niveluri + scor + diff între rulări
 │   ├── text.js          # normalizare fără diacritice + potrivire pe cuvinte
 │   ├── jobs.js          # job-uri în fundal, progres, anulare, salvare pe disc
 │   ├── http.js          # fetch + cookie jar + retry/backoff + strip XSSI + probe rețea
@@ -198,6 +235,7 @@ yt-country-pulse/
 - **Cotă YouTube:** 10.000 unități/zi → practic nelimitat pentru uz personal.
 - **Rate limit local:** 40 cereri/minut/IP; cache-ul face refresh-urile ieftine.
 - **Clasificare:** euristică, nu model. „românia", nume de oameni, branduri → „Altele". Filtrele de text și de zile compensează.
+- **Autocomplete:** 13–15 sugestii per prefix, fără volum; clasamentul e al nostru, statistic, nu al Google. Poate răspunde 429 dacă insiști.
 - **Estimarea:** e un multiplicator istoric, nu o predicție. O interogare poate urca din motive pe care datele nu le conțin (un meci, un deces, un trend pe TikTok).
 
 ## Deploy pe Vercel

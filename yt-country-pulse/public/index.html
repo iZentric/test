@@ -26,6 +26,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="day" role="tab" aria-selected="true">O zi</button>
     <button class="tab" data-tab="range" role="tab" aria-selected="false">Tabel pe perioadă</button>
+    <button class="tab" data-tab="harvest" role="tab" aria-selected="false">Sugestii (autocomplete)</button>
   </nav>
 
   <main>
@@ -271,6 +272,110 @@
           Un an întreg înseamnă maximum ~7.300 de intrări brute, care se unifică în câteva mii de interogări unice.
           „Trafic cumulat" e suma estimărilor zilnice — util pentru comparație între interogări, nu un număr exact de persoane.
           Colectarea unui an durează câteva minute și merge în fundal; zilele deja luate se cache-uiesc 60 de zile.
+        </p>
+      </section>
+    </div>
+
+    <!-- ================= CRAWLER DE SUGESTII ================= -->
+    <div id="view-harvest" class="view hidden">
+      <section class="panel controls">
+        <div class="field">
+          <label for="hCountry">Țara</label>
+          <select id="hCountry"></select>
+        </div>
+        <div class="field">
+          <label for="hHl">Limba</label>
+          <select id="hHl">
+            <option value="ro">română</option>
+            <option value="en">engleză</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="hDepth">Adâncime</label>
+          <select id="hDepth">
+            <option value="2">2 niveluri (recomandat)</option>
+            <option value="1">1 nivel (rapid)</option>
+          </select>
+        </div>
+        <div class="field field-wide">
+          <label for="hSeeds">Prefixe în plus <span class="hint">(opțional, virgulă)</span></label>
+          <input id="hSeeds" type="text" placeholder="ex: gta, insula, colinde, manele" autocomplete="off" />
+        </div>
+        <div class="field field-actions">
+          <button id="hStart" class="btn btn-primary">Colectează</button>
+        </div>
+        <label class="check check-inline">
+          <input id="hDemo" type="checkbox" />
+          <span>demo</span>
+        </label>
+      </section>
+
+      <section id="hJobBar" class="panel jobbar hidden">
+        <div class="jobbar-top">
+          <strong id="hJobTitle">Colectez sugestii…</strong>
+          <button id="hCancel" class="btn btn-ghost">Anulează</button>
+        </div>
+        <div class="bar"><div id="hJobFill" class="bar-fill"></div></div>
+        <div id="hJobText" class="job-text">—</div>
+      </section>
+
+      <section id="hWarnings" class="warnings hidden"></section>
+      <section class="stats" id="hStats"></section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Sugestii ordonate</h2>
+          <span class="panel-sub" id="hSub">—</span>
+        </div>
+
+        <div class="filters">
+          <input id="hSearch" class="filter-search" type="text" placeholder="Caută în sugestii…" autocomplete="off" />
+          <select id="hSort" class="filter-sort">
+            <option value="score">Sortează: scor</option>
+            <option value="appearances">Sortează: apariții</option>
+            <option value="alpha">Sortează: alfabetic</option>
+            <option value="new">Sortează: noi întâi</option>
+          </select>
+          <label class="check check-inline">
+            <input id="hOnlyNew" type="checkbox" />
+            <span>doar termeni noi</span>
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-n">#</th>
+                <th>Sugestie</th>
+                <th class="col-num">Scor</th>
+                <th class="col-num">Apariții</th>
+                <th class="col-num">Loc</th>
+                <th>Apare pentru</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="hBody"></tbody>
+          </table>
+        </div>
+        <div class="table-foot">
+          <span id="hCount" class="panel-sub">—</span>
+          <button id="hMore" class="btn btn-ghost hidden">Arată mai multe</button>
+        </div>
+      </section>
+
+      <section class="panel sources">
+        <div class="panel-head">
+          <h2>Ce e asta — și ce nu e</h2>
+          <span class="panel-sub" id="hGeneratedAt"></span>
+        </div>
+        <p class="disclaimer">
+          Sunt sugestiile reale pe care le dă bara de căutare YouTube pentru prefixele cerute (a–z, 0–9, ă â î ș ț,
+          întrebări de tipul „cum", „cine", „de ce"), plus o rundă a doua care reinterogează cei mai promițători termeni.
+          <strong>Scorul nu e volum de căutări</strong> — e un proxy: cât de sus apare termenul (poziția în sugestii) ×
+          din câte prefixe diferite iese la iveală. Autocomplete-ul nu publică cifre de volum, iar Google nu expune
+          nicio listă completă de căutări. Coloana „Apare pentru" arată exact din ce prefixe a fost adunat termenul.
+          Pentru „ce e în trend azi", folosește tabul <em>Tabel pe perioadă</em> (Google Trends).
         </p>
       </section>
     </div>

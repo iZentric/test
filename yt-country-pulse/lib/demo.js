@@ -224,3 +224,24 @@ export function demoPulse({ geo, date, seed }) {
     },
   };
 }
+
+/**
+ * Corpus demo pentru crawler-ul de sugestii: zeci de termeni realisti,
+ * ca sa se poata testa/preview-ui fluxul fara acces la Google.
+ */
+export function demoCorpus(geo) {
+  const country = countryOf(geo);
+  const pool = POOLS[country.code] || POOLS.DEFAULT;
+  const out = new Set();
+  for (const q of pool.queries) {
+    out.add(q);
+    out.add(`${q} 2026`);
+    out.add(`${q} live`);
+    out.add(`${q} azi`);
+  }
+  for (const t of pool.titles) {
+    const first = t.split(/[|:—]/)[0].trim();
+    if (first.length > 5) out.add(first.toLowerCase());
+  }
+  return [...out];
+}

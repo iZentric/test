@@ -8,6 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { buildPulse } from './lib/pulse.js';
 import { COUNTRIES, countryTerms } from './lib/countries.js';
 import { upcomingEvents } from './lib/events.js';
+import {
+  startHarvest,
+  getHarvestJob,
+  cancelHarvestJob,
+  listHarvestJobs,
+  harvestMeta,
+  loadLatest,
+} from './lib/harvest.js';
 import { createJob, getJob, cancelJob, listJobs, jobMeta } from './lib/jobs.js';
 import { MAX_DAYS, isValidDate } from './lib/collect.js';
 
@@ -164,6 +172,87 @@ const server = http.createServer(async (req, res) => {
 
       res.setHeader('access-control-allow-origin', '*');
       sendJson(res, 200, payload);
+      return;
+    }
+
+    // ---------- crawler de sugestii (autocomplete) ----------
+    if (url.pathname === '/api/harvest/latest' && req.method === 'GET') {
+      const geo = String(url.searchParams.get('geo') || 'RO').toUpperCase().slice(0, 2);
+      const latest = await loadLatest(geo);
+      sendJson(res, 200, {
+        ok: true,
+        geo,
+        latest: latest
+          ? {
+              finishedAt: latest.finishedAt,
+              stats: latest.stats,
+              terms: latest.terms.slice(0, 500),
+              total: latest.terms.length,
+            }
+          : null,
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/harvest' && req.method === 'POST') {
+      if (rateLimited(ip)) {
+        sendJson(res, 429, { ok: false, error: 'Prea multe cereri. Așteaptă un minut.' });
+        return;
+      }
+      let body;
+      try {
+        body = JSON.parse((await readBody(req)) || '{}');
+      } catch {
+        sendJson(res, 400, { ok: false, error: 'JSON invalid în body.' });
+        return;
+      }
+      const geo = String(body.geo || 'RO').toUpperCase().slice(0, 2);
+      const depth = Number(body.depth) >= 2 ? 2 : 1;
+      const extraSeeds = Array.isArray(body.extraSeeds)
+        ? body.extraSeeds.map((x) => String(x).trim()).filter(Boolean).slice(0, 30)
+        : String(body.extraSeeds || '')
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean)
+            .slice(0, 30);
+      const job = startHarvest({
+        geo,
+        hl: String(body.hl || (geo === 'RO' ? 'ro' : 'en')).slice(0, 5),
+        depth,
+        extraSeeds,
+        maxExpansion: Math.max(0, Math.min(Number(body.maxExpansion) || 40, 200)),
+        demo: Boolean(body.demo),
+      });
+      sendJson(res, 202, { ok: true, jobId: job.id, job: harvestMeta(job) });
+      return;
+    }
+
+    if (url.pathname === '/api/harvest' && req.method === 'GET') {
+      sendJson(res, 200, { ok: true, jobs: listHarvestJobs() });
+      return;
+    }
+
+    const harvestMatch = url.pathname.match(/^\/api\/harvest\/([A-Za-z0-9-]+)(\/cancel)?$/);
+    if (harvestMatch) {
+      const job = getHarvestJob(harvestMatch[1]);
+      if (!job) {
+        sendJson(res, 404, { ok: false, error: 'Job inexistent (sau șters din memorie).' });
+        return;
+      }
+      if (harvestMatch[2]) {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'Folosește POST pentru anulare.' });
+          return;
+        }
+        cancelHarvestJob(job.id);
+        sendJson(res, 200, { ok: true, job: harvestMeta(job) });
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        job: harvestMeta(job),
+        result: job.status === 'done' || job.status === 'cancelled' ? job.result : null,
+      });
       return;
     }
 

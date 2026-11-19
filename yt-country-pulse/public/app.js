@@ -71,6 +71,7 @@ async function init() {
 
   initTabs();
   await initRange();
+  await initHarvest();
 
   load();
   if (state.activeView !== 'range') switchTab('day');
@@ -160,9 +161,7 @@ function renderSkeletons() {
 function render(payload) {
   const { country, demo, mode, warnings = [] } = payload;
 
-  const pillKind = demo ? 'demo' : mode === 'live' ? 'live' : mode === 'partial' ? 'partial' : 'error';
-  const pillText = demo ? 'date demo' : mode === 'live' ? 'live' : mode === 'partial' ? 'parțial' : 'fără date';
-  setPill(pillKind, pillText);
+  refreshPill();
 
   renderWarnings(warnings.map((w) => ({ level: demo ? 'info' : 'warn', text: w })));
   renderStats(payload);
@@ -419,6 +418,7 @@ function download(filename, content, type) {
 }
 
 function exportJson() {
+  if (state.activeView === 'harvest') return exportHarvestJson();
   if (state.activeView === 'range') return exportRangeJson();
   if (!state.lastPayload) return;
   const geo = state.lastPayload.geo || 'RO';
@@ -432,6 +432,7 @@ function csvCell(value) {
 }
 
 function exportCsv() {
+  if (state.activeView === 'harvest') return exportHarvestCsv();
   if (state.activeView === 'range') return exportRangeCsv();
   const p = state.lastPayload;
   if (!p) return;
@@ -545,8 +546,28 @@ function initTabs() {
   });
 }
 
+
+function refreshPill() {
+  if (state.activeView === 'harvest') {
+    if (harv.job && ['running', 'queued', 'cancelling'].includes(harv.job.status)) return setPill('busy', 'colectez');
+    if (!harv.result) return setPill('idle', 'în așteptare');
+    const demo = harv.result.stats?.demo;
+    return setPill(demo ? 'demo' : 'live', demo ? 'sugestii demo' : 'sugestii live');
+  }
+  if (state.activeView === 'range') {
+    if (range.job && ['running', 'queued', 'cancelling'].includes(range.job.status)) return setPill('busy', 'colectez');
+    if (!range.result) return setPill('idle', 'în așteptare');
+    return setPill(range.result.demo ? 'demo' : 'live', range.result.demo ? 'date demo' : 'tabel live');
+  }
+  const p = state.lastPayload;
+  if (!p) return setPill('idle', 'în așteptare');
+  if (p.demo) return setPill('demo', 'date demo');
+  return setPill(p.mode === 'live' ? 'live' : p.mode === 'partial' ? 'partial' : 'error',
+    p.mode === 'live' ? 'live' : p.mode === 'partial' ? 'parțial' : 'fără date');
+}
+
 function switchTab(name) {
-  state.activeView = name === 'range' ? 'range' : 'day';
+  state.activeView = ['range', 'harvest'].includes(name) ? name : 'day';
   document.querySelectorAll('.tab').forEach((b) => {
     const on = b.dataset.tab === state.activeView;
     b.classList.toggle('active', on);
@@ -554,6 +575,8 @@ function switchTab(name) {
   });
   $('#view-day').classList.toggle('hidden', state.activeView !== 'day');
   $('#view-range').classList.toggle('hidden', state.activeView !== 'range');
+  $('#view-harvest').classList.toggle('hidden', state.activeView !== 'harvest');
+  refreshPill();
 }
 
 async function initRange() {
@@ -898,7 +921,7 @@ function renderRange() {
   const r = range.result;
   if (!r) return;
 
-  setPill(r.demo ? 'demo' : 'live', r.demo ? 'date demo' : 'tabel live');
+  refreshPill();
 
   const cov = r.coverage || {};
   const warnings = [];
@@ -1207,6 +1230,324 @@ function exportRangeCsv() {
     );
   });
   download(`youtube-tabel-${r.geo}-${r.from}_${r.to}.csv`, `\uFEFF${lines.join('\n')}`, 'text/csv;charset=utf-8');
+}
+
+
+/* ===================================================================
+   CRAWLER DE SUGESTII (autocomplete YouTube)
+   =================================================================== */
+
+const harv = {
+  jobId: null,
+  job: null,
+  result: null,
+  pollTimer: null,
+  search: '',
+  sort: 'score',
+  onlyNew: false,
+  shown: 300,
+};
+
+async function initHarvest() {
+  const fill = (sel) => {
+    sel.innerHTML = state.countries
+      .map((c) => `<option value="${esc(c.code)}">${esc(c.flag)} ${esc(c.name)} (${esc(c.code)})</option>`)
+      .join('');
+  };
+  fill($('#hCountry'));
+  $('#hCountry').value = localStorage.getItem('ytp.geo') || 'RO';
+  if (!$('#hCountry').value) $('#hCountry').value = 'RO';
+  $('#hHl').value = localStorage.getItem('ytp.hl') || ($('#hCountry').value === 'RO' ? 'ro' : 'en');
+  $('#hDepth').value = localStorage.getItem('ytp.hdepth') || '2';
+  $('#hDemo').checked = localStorage.getItem('ytp.hdemo') === '1';
+
+  $('#hStart').addEventListener('click', startHarvest);
+  $('#hCancel').addEventListener('click', cancelHarvest);
+  $('#hSearch').addEventListener('input', (e) => {
+    harv.search = e.target.value.trim().toLowerCase();
+    harv.shown = 300;
+    renderHarvestTable();
+  });
+  $('#hSort').addEventListener('change', (e) => {
+    harv.sort = e.target.value;
+    renderHarvestTable();
+  });
+  $('#hOnlyNew').addEventListener('change', (e) => {
+    harv.onlyNew = e.target.checked;
+    harv.shown = 300;
+    renderHarvestTable();
+  });
+  $('#hMore').addEventListener('click', () => {
+    harv.shown += 300;
+    renderHarvestTable();
+  });
+  $('#hCountry').addEventListener('change', () => {
+    $('#hHl').value = $('#hCountry').value === 'RO' ? 'ro' : 'en';
+    loadHarvestLatest();
+  });
+
+  await loadHarvestLatest();
+
+  const saved = localStorage.getItem('ytp.hjob');
+  if (saved) resumeHarvest(saved);
+}
+
+async function loadHarvestLatest() {
+  const geo = $('#hCountry').value || 'RO';
+  try {
+    const res = await fetch(`/api/harvest/latest?geo=${encodeURIComponent(geo)}`);
+    const data = await res.json();
+    if (!data.latest) {
+      $('#hSub').textContent = 'nicio rulare anterioară salvată';
+      return;
+    }
+    harv.result = {
+      geo,
+      terms: data.latest.terms,
+      stats: { ...data.latest.stats, uniqueTerms: data.latest.total },
+      finishedAt: data.latest.finishedAt,
+      fromSnapshot: true,
+    };
+    renderHarvest();
+  } catch {
+    /* ignoram */
+  }
+}
+
+async function startHarvest() {
+  const geo = $('#hCountry').value || 'RO';
+  const hl = $('#hHl').value || 'ro';
+  const depth = Number($('#hDepth').value) || 2;
+  const demo = $('#hDemo').checked;
+  const extraSeeds = $('#hSeeds')
+    .value.split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, 30);
+
+  localStorage.setItem('ytp.hl', hl);
+  localStorage.setItem('ytp.hdepth', String(depth));
+  localStorage.setItem('ytp.hdemo', demo ? '1' : '0');
+  localStorage.setItem('ytp.geo', geo);
+
+  $('#hStart').disabled = true;
+  setPill('busy', 'colectez');
+  $('#hWarnings').classList.add('hidden');
+  $('#hWarnings').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/harvest', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ geo, hl, depth, demo, extraSeeds, maxExpansion: 40 }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      showHarvestWarning(data.error || 'Nu am putut porni colectarea.');
+      $('#hStart').disabled = false;
+      setPill('error', 'eroare');
+      return;
+    }
+    harv.jobId = data.jobId;
+    harv.job = data.job;
+    localStorage.setItem('ytp.hjob', data.jobId);
+    showHarvestJob(data.job);
+    pollHarvest(data.jobId);
+  } catch (err) {
+    showHarvestWarning(`Serverul nu a răspuns: ${err.message}`);
+    $('#hStart').disabled = false;
+    setPill('error', 'eroare');
+  }
+}
+
+async function cancelHarvest() {
+  if (!harv.jobId) return;
+  try {
+    await fetch(`/api/harvest/${encodeURIComponent(harv.jobId)}/cancel`, { method: 'POST' });
+  } catch {
+    /* ignoram */
+  }
+}
+
+async function resumeHarvest(id) {
+  try {
+    const res = await fetch(`/api/harvest/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      localStorage.removeItem('ytp.hjob');
+      return;
+    }
+    const data = await res.json();
+    harv.jobId = id;
+    harv.job = data.job;
+    showHarvestJob(data.job);
+    if (['running', 'queued', 'cancelling'].includes(data.job.status)) {
+      switchTab('harvest');
+      pollHarvest(id);
+    } else if (data.result) {
+      harv.result = data.result;
+      switchTab('harvest');
+      renderHarvest();
+    }
+  } catch {
+    /* job expirat */
+  }
+}
+
+function showHarvestJob(job) {
+  $('#hJobBar').classList.remove('hidden');
+  const p = job.progress || {};
+  const pct = job.status === 'done' ? 100 : p.pct || 0;
+  $('#hJobTitle').textContent =
+    job.status === 'done'
+      ? 'Gata'
+      : job.status === 'cancelled'
+        ? 'Anulat'
+        : job.status === 'error'
+          ? 'Eroare'
+          : job.demo
+            ? 'Generez sugestii demo…'
+            : 'Colectez sugestii de la YouTube…';
+  $('#hJobFill').style.width = `${pct}%`;
+  const parts = [`${pct}%`, `${p.index || 0}/${p.total || '?'} cereri`, `${p.terms || 0} termeni`];
+  if (p.level === 2) parts.push('nivelul 2 (expandare)');
+  if (p.currentSeed) parts.push(`„${p.currentSeed}"`);
+  $('#hJobText').textContent = parts.join(' · ');
+  $('#hCancel').classList.toggle('hidden', !['running', 'queued', 'cancelling'].includes(job.status));
+}
+
+function pollHarvest(id) {
+  if (harv.pollTimer) clearInterval(harv.pollTimer);
+  const tick = async () => {
+    try {
+      const res = await fetch(`/api/harvest/${encodeURIComponent(id)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        clearInterval(harv.pollTimer);
+        harv.pollTimer = null;
+        return;
+      }
+      harv.job = data.job;
+      showHarvestJob(data.job);
+      if (['done', 'cancelled', 'error'].includes(data.job.status)) {
+        clearInterval(harv.pollTimer);
+        harv.pollTimer = null;
+        $('#hStart').disabled = false;
+        if (data.job.status === 'error') {
+          setPill('error', 'eroare');
+          showHarvestWarning(data.job.error || 'Colectarea a eșuat.');
+          return;
+        }
+        if (data.result) {
+          harv.result = data.result;
+          renderHarvest();
+        }
+      }
+    } catch {
+      clearInterval(harv.pollTimer);
+      harv.pollTimer = null;
+      $('#hStart').disabled = false;
+      setPill('error', 'eroare');
+    }
+  };
+  tick();
+  harv.pollTimer = setInterval(tick, 1200);
+}
+
+function showHarvestWarning(text) {
+  const box = $('#hWarnings');
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="warn-item error"><span class="ico">⛔</span><span>${esc(text)}</span></div>`;
+}
+
+function renderHarvest() {
+  const r = harv.result;
+  if (!r) return;
+
+  const stats = r.stats || {};
+  refreshPill();
+
+  const cards = [
+    { k: 'Termeni unici', v: nf.format(stats.uniqueTerms || r.terms.length), m: `${stats.seedsQueried || '—'} prefixe interogate` },
+    { k: 'Termeni noi', v: nf.format(stats.newTerms || 0), m: stats.previousRunAt ? `față de ${stats.previousRunAt.slice(0, 10)}` : 'prima rulare' },
+    { k: 'Cereri', v: nf.format(stats.requests || 0), m: `${Math.round((stats.durationMs || 0) / 1000)}s durată` },
+    { k: 'Țara / limba', v: `${r.geo} / ${r.hl || 'ro'}`, m: r.fromSnapshot ? 'rulare anterioară' : 'proaspăt' },
+  ];
+  $('#hStats').innerHTML = cards
+    .map((c) => `<div class="stat"><div class="k">${esc(c.k)}</div><div class="v">${esc(c.v)}</div><div class="m">${esc(c.m)}</div></div>`)
+    .join('');
+
+  $('#hGeneratedAt').textContent = r.finishedAt ? `rulat ${new Date(r.finishedAt).toLocaleString('ro-RO')}` : '';
+  $('#hSub').textContent = `${nf.format(r.terms.length)} termeni · ${r.fromSnapshot ? 'din ultima rulare salvată' : 'colectare nouă'}`;
+
+  if (r.errors && r.errors.length) {
+    showHarvestWarning(`${r.errors.length} prefixe au eșuat (ex. „${r.errors[0].seed}": ${r.errors[0].error}). Reîncearcă — ce a mers e deja în cache.`);
+  }
+
+  renderHarvestTable();
+}
+
+function harvestRows() {
+  const r = harv.result;
+  if (!r) return [];
+  let rows = [...r.terms];
+  if (harv.onlyNew) rows = rows.filter((t) => t.isNew);
+  if (harv.search) rows = rows.filter((t) => t.term.toLowerCase().includes(harv.search));
+
+  if (harv.sort === 'appearances') rows.sort((a, b) => b.appearances - a.appearances || b.score - a.score);
+  else if (harv.sort === 'alpha') rows.sort((a, b) => a.term.localeCompare(b.term, 'ro'));
+  else if (harv.sort === 'new') rows.sort((a, b) => Number(b.isNew) - Number(a.isNew) || b.score - a.score);
+  else rows.sort((a, b) => b.score - a.score || b.appearances - a.appearances);
+
+  return rows;
+}
+
+function renderHarvestTable() {
+  const rows = harvestRows();
+  const shown = rows.slice(0, harv.shown);
+
+  $('#hBody').innerHTML = shown
+    .map((t, i) => {
+      const seeds = (t.seeds || [])
+        .slice(0, 4)
+        .map((s) => `<span class="chip">${esc(s)}</span>`)
+        .join('');
+      return `<tr>
+        <td class="col-n">${i + 1}</td>
+        <td class="rq">${esc(t.term)}</td>
+        <td class="col-num">${t.score.toFixed(1)}</td>
+        <td class="col-num">${t.appearances}</td>
+        <td class="col-num">#${t.bestRank}</td>
+        <td><div class="chips">${seeds}</div></td>
+        <td>${t.isNew ? '<span class="badge-new">NOU</span>' : ''}</td>
+      </tr>`;
+    })
+    .join('');
+
+  if (!rows.length) {
+    $('#hBody').innerHTML = '<tr><td colspan="7" class="empty" style="padding:18px">Nicio sugestie pentru filtrele curente.</td></tr>';
+  }
+
+  $('#hCount').textContent = `${nf.format(rows.length)} sugestii${rows.length > shown.length ? ` · afișate ${nf.format(shown.length)}` : ''}`;
+  $('#hMore').classList.toggle('hidden', rows.length <= shown.length);
+}
+
+function exportHarvestJson() {
+  const r = harv.result;
+  if (!r) return;
+  download(`youtube-sugestii-${r.geo}.json`, JSON.stringify(r, null, 2), 'application/json');
+}
+
+function exportHarvestCsv() {
+  const r = harv.result;
+  if (!r) return;
+  const rows = harvestRows();
+  const lines = ['loc,termen,scor,aparitiI,cel_mai_bun_loc,medie_loc,surse,nou'];
+  rows.forEach((t, i) => {
+    lines.push(
+      [i + 1, csvCell(t.term), t.score, t.appearances, t.bestRank, t.avgRank, csvCell((t.seeds || []).join(' | ')), t.isNew ? 'da' : 'nu'].join(','),
+    );
+  });
+  download(`youtube-sugestii-${r.geo}.csv`, `\uFEFF${lines.join('\n')}`, 'text/csv;charset=utf-8');
 }
 
 init();

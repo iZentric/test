@@ -13,6 +13,7 @@ import { COUNTRIES, countryOf } from './lib/countries.js';
 import { collectRange, dateRange } from './lib/collect.js';
 import { aggregate } from './lib/aggregate.js';
 import { CATEGORIES, categoryLabel } from './lib/classify.js';
+import { harvest } from './lib/harvest.js';
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -46,6 +47,11 @@ YouTube Country Pulse — CLI
   --demo            Date eșantion, fără cereri către Google
   --json <fișier>   Scrie răspunsul complet în fișier JSON
   --csv             Afișează CSV în loc de sumar
+
+  --harvest         Crawler de sugestii (autocomplete) — listă ordonată de termeni
+  --depth <1|2>     Niveluri de expandare pentru --harvest          [default: 2]
+  --expand <n>      Câți termeni reinterogați la nivelul 2           [default: 40]
+  --seeds <listă>   Prefixe suplimentare (virgulă) pentru --harvest
 
   --range <zile>    Colectează ultimele N zile (ex. 30, 365) și agregă tabelul
   --from <data>     Începutul intervalului (YYYY-MM-DD)
@@ -85,6 +91,11 @@ async function main() {
   if (args.help) return help();
   if (args.list) {
     for (const c of COUNTRIES) console.log(`${c.code}  ${c.flag}  ${c.name}`);
+    return;
+  }
+
+  if (args.harvest) {
+    await runHarvestCli(args);
     return;
   }
 
@@ -261,6 +272,77 @@ async function runRange(args) {
   }
   if (args.out) {
     await writeFile(String(args.out), `\uFEFF${csvOfRows(rows)}`, 'utf8');
+    console.error(`CSV scris în ${args.out}`);
+  }
+}
+
+
+function csvOfHarvest(terms) {
+  const lines = ['loc,termen,scor,aparitiI,cel_mai_bun_loc,medie_loc,surse,nou'];
+  terms.forEach((t, i) => {
+    lines.push(
+      [i + 1, t.term, t.score, t.appearances, t.bestRank, t.avgRank, (t.seeds || []).join(' | '), t.isNew ? 'da' : 'nu']
+        .map(csvCell)
+        .join(','),
+    );
+  });
+  return lines.join('\n');
+}
+
+async function runHarvestCli(args) {
+  const geo = String(args.geo || 'RO').toUpperCase();
+  const depth = Number(args.depth) === 1 ? 1 : 2;
+  const demo = Boolean(args.demo);
+  const maxExpansion = Number(args.expand) || 40;
+  const top = Number(args.top) || 50;
+  const extraSeeds = String(args.seeds || '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  console.error(`Crawler sugestii pentru ${geo} (adâncime ${depth}${demo ? ', DEMO' : ''})…`);
+
+  const result = await harvest({
+    geo,
+    depth,
+    demo,
+    extraSeeds,
+    maxExpansion,
+    onProgress: (p) => {
+      if (p.index % 5 === 0 || p.index === p.total) {
+        process.stderr.write(`\r  ${p.index}/${p.total} cereri · ${p.terms} termeni   `);
+      }
+    },
+  });
+  process.stderr.write('\n');
+
+  if (args.csv) {
+    process.stdout.write(`\uFEFF${csvOfHarvest(result.terms)}`);
+    return;
+  }
+
+  console.log('');
+  console.log(`  SUGESTII ${geo}  ·  ${result.stats.uniqueTerms} termeni  ·  ${result.stats.seedsQueried} prefixe  ·  ${result.stats.newTerms} noi  ·  ${Math.round((result.stats.durationMs || 0) / 1000)}s`);
+  console.log('  ' + '─'.repeat(74));
+  console.log(`  ${'#'.padStart(4)}  ${'termen'.padEnd(36)} ${'scor'.padStart(6)} ${'apariții'.padStart(9)} ${'loc'.padStart(5)}`);
+  console.log('  ' + '─'.repeat(74));
+  result.terms.slice(0, top).forEach((t, i) => {
+    console.log(
+      `  ${String(i + 1).padStart(4)}  ${t.term.slice(0, 36).padEnd(36)} ${String(t.score).padStart(6)} ${String(t.appearances).padStart(9)} ${('#' + t.bestRank).padStart(5)}${t.isNew ? '  NOU' : ''}`,
+    );
+  });
+  if (result.errors?.length) {
+    console.log('');
+    console.log(`  ${result.errors.length} erori (ex. ${result.errors[0].seed}: ${result.errors[0].error})`);
+  }
+  console.log('');
+
+  if (args.json) {
+    await writeFile(String(args.json), JSON.stringify(result, null, 2), 'utf8');
+    console.error(`JSON scris în ${args.json}`);
+  }
+  if (args.out) {
+    await writeFile(String(args.out), `\uFEFF${csvOfHarvest(result.terms)}`, 'utf8');
     console.error(`CSV scris în ${args.out}`);
   }
 }
