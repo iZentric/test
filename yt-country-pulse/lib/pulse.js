@@ -5,6 +5,7 @@ import { cached } from './cache.js';
 import * as trends from './trends.js';
 import * as youtube from './youtube.js';
 import { demoPulse } from './demo.js';
+import { classify } from './classify.js';
 import { canReachGoogle } from './http.js';
 
 const TTL = {
@@ -12,6 +13,11 @@ const TTL = {
   videos: 15 * 60 * 1000, // 15 min
   interest: 30 * 60 * 1000,
 };
+
+/** Adauga categoria pe fiecare interogare (ca UI-ul sa poata filtra si in tabul "O zi"). */
+function withCategories(items) {
+  return (items || []).map((item) => ({ ...item, category: classify(item.query).category }));
+}
 
 function source(status, extra = {}) {
   return { status, ...extra };
@@ -30,6 +36,9 @@ export async function buildPulse({ geo = 'RO', date = null, seed = '', apiKey = 
 
   if (demo) {
     const data = demoPulse({ geo: code, date: cleanDate, seed: cleanSeed });
+    if (data?.trendingSearches?.items) {
+      data.trendingSearches.items = withCategories(data.trendingSearches.items);
+    }
     return {
       ok: true,
       mode: 'demo',
@@ -98,7 +107,7 @@ export async function buildPulse({ geo = 'RO', date = null, seed = '', apiKey = 
   // 1. Cautari in trend
   if (trendRes.status === 'fulfilled') {
     const value = trendRes.value.value;
-    trendingSearches = value;
+    trendingSearches = { ...value, items: withCategories(value.items) };
     if (value.items.length === 0) {
       sources.push(source('empty', { id: 'trends-trending', label: 'Căutări în trend', provider: 'Google Trends', note: 'nicio zi disponibilă pentru data cerută' }));
       warnings.push('Google Trends nu a returnat căutări pentru data aleasă (posibil prea recent sau prea vechi).');

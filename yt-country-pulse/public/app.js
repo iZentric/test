@@ -73,8 +73,32 @@ async function init() {
   await initRange();
   await initHarvest();
 
-  load();
+  await load();
   if (state.activeView !== 'range') switchTab('day');
+  syncDayStrict();
+  await maybeAutoLoadDemo();
+}
+
+/**
+ * Daca mediul nu are acces la Google (ex. preview in sandbox), generam automat
+ * o colectare demo pe ultimele 30 de zile, ca pagina sa nu fie goala.
+ */
+async function maybeAutoLoadDemo() {
+  if (localStorage.getItem('ytp.autoloaded') === '1') return;
+  if (localStorage.getItem('ytp.job')) return;
+  if (range.result) return;
+
+  const payload = state.lastPayload;
+  if (!payload) return;
+  const noLive = payload.demo === true || payload.mode === 'offline' || payload.ok === false;
+  if (!noLive) return;
+
+  $('#rDemo').checked = true;
+  $('#rTo').value = yesterday();
+  $('#rFrom').value = addDaysISO(yesterday(), -29);
+  localStorage.setItem('ytp.autoloaded', '1');
+  switchTab('range');
+  await collect();
 }
 
 function setBusy(busy) {
@@ -189,8 +213,19 @@ function renderWarnings(items) {
     .join('');
 }
 
+function dayFilteredSearches() {
+  const items = state.lastPayload?.trendingSearches?.items || [];
+  return items.filter((it) => passesFilters(it.query, it.category || 'other'));
+}
+
+function syncDayStrict() {
+  const el = $('#dayStrict');
+  if (el) el.checked = range.cleanMode === 'strict';
+}
+
 function renderStats(payload) {
-  const searches = payload.trendingSearches?.items || [];
+  const searches = dayFilteredSearches();
+  const allSearches = payload.trendingSearches?.items || [];
   const videos = payload.trendingVideos || [];
   const seedPoints = payload.seed?.points || [];
 
@@ -202,7 +237,9 @@ function renderStats(payload) {
     {
       k: 'Căutări în trend',
       v: searches.length || '—',
-      m: searches.length ? `≈ ${nfCompact.format(totalTraffic)} căutări estimate, cumulat` : 'indisponibil',
+      m: searches.length
+        ? `din ${allSearches.length} · ≈ ${nfCompact.format(totalTraffic)} cumulat`
+        : `${allSearches.length} brute, 0 după filtre`,
     },
     {
       k: 'Videoclipuri în trend',
@@ -265,17 +302,20 @@ function renderVideos(payload) {
 }
 
 function renderSearches(payload) {
-  const items = payload.trendingSearches?.items || [];
+  const all = payload.trendingSearches?.items || [];
+  const items = dayFilteredSearches();
   const box = $('#searches');
   const sub = $('#searchesSub');
 
   if (!items.length) {
-    box.innerHTML = '<p class="empty">Google Trends nu a returnat căutări pentru această țară și zi.</p>';
-    sub.textContent = 'Google Trends';
+    box.innerHTML = all.length
+      ? '<p class="empty">Toate cele ' + all.length + ' interogări ale zilei sunt filtrate (știri, stat, filme, sport…). Debifează „Fără știri, stat, filme, meciuri" ca să le vezi.</p>'
+      : '<p class="empty">Google Trends nu a returnat căutări pentru această țară și zi.</p>';
+    sub.textContent = all.length ? `0 din ${all.length} după filtre` : 'Google Trends';
     return;
   }
 
-  sub.textContent = `top ${items.length} · ${payload.demo ? 'demo' : 'Google Trends'}`;
+  sub.textContent = `${items.length} din ${all.length} după filtre · ${payload.demo ? 'demo' : 'Google Trends'}`;
   box.innerHTML = items
     .map((s) => {
       const related = (s.relatedQueries || []).map((q) => `<span class="chip">${esc(q)}</span>`).join('');
@@ -668,6 +708,9 @@ async function initRange() {
         range.minDays = savedFilters.minDays;
         $('#rMinDays').value = String(savedFilters.minDays);
       }
+    } else {
+      // prima vizita: pornim direct cu filtrul strict (fara stiri/stat/dezastre)
+      applyCleanMode('strict');
     }
   } catch {
     /* ignoram filtrele corupte */
@@ -688,6 +731,7 @@ async function initRange() {
     refreshFiltered();
   });
 
+  $('#dayStrict').addEventListener('change', (e) => applyCleanMode(e.target.checked ? 'strict' : false));
   $('#cleanMode').addEventListener('click', () => applyCleanMode(range.cleanMode === 'soft' ? false : 'soft'));
   $('#strictMode').addEventListener('click', () => applyCleanMode(range.cleanMode === 'strict' ? false : 'strict'));
   $('#resetFilters').addEventListener('click', resetFilters);
@@ -746,6 +790,11 @@ function applyCleanMode(mode) {
   persistFilters();
   refreshFiltered();
   if (range.result) renderCategoryChips(range.result);
+  syncDayStrict();
+  if (state.lastPayload) {
+    renderStats(state.lastPayload);
+    renderSearches(state.lastPayload);
+  }
 }
 
 function resetFilters() {
@@ -767,6 +816,11 @@ function resetFilters() {
   persistFilters();
   refreshFiltered();
   if (range.result) renderCategoryChips(range.result);
+  syncDayStrict();
+  if (state.lastPayload) {
+    renderStats(state.lastPayload);
+    renderSearches(state.lastPayload);
+  }
 }
 
 function refreshFiltered() {
@@ -834,7 +888,7 @@ async function collect() {
   localStorage.setItem('ytp.rTo', to);
   localStorage.setItem('ytp.demo', demo ? '1' : '0');
 
-  range.excluded = new Set();
+  // păstrăm filtrele active (presetul „fără stat & dezastre" nu se resetează la o colectare nouă)
   range.search = '';
   range.shown = 300;
   $('#rSearch').value = '';
