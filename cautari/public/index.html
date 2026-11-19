@@ -35,28 +35,26 @@
 
       <section class="card">
         <div class="card-head">
-          <h2>Generator de tag-uri</h2>
+          <h2>Tag-urile mele, actualizate</h2>
           <span class="muted" id="tagSub">pune titlul videoclipului</span>
         </div>
         <p class="hint">
-          Iese lista ordonată după dovezi: întâi tag-urile care <strong>chiar aduc canalul</strong> în căutare,
-          apoi căutări reale care conțin cuvintele din titlu. Tag-urile lipite mai jos trec prin filtru:
-          cele generice sau numele altor creatori sunt scoase, cu motivul afișat.
+          Lista ta nu se șterge. Fiecare tag primește un verdict din date reale: <strong>aduce canalul</strong>
+          (apare în căutările care îl aduc în rezultate), <strong>căutare reală</strong> (apare în ce caută lumea azi),
+          <strong>fără dovezi</strong> (nu apare în eșantionul de azi). Ce nu încape în 500 de caractere rămâne marcat.
         </p>
         <div class="tag-form">
           <input id="tagTitle" type="text" placeholder="titlul videoclipului, ex. PAM PAM inainte de GTA 6" />
-          <textarea id="tagExisting" rows="3" placeholder="(opțional) tag-urile pe care le folosești acum — cu virgulă sau lipite"></textarea>
+          <textarea id="tagExisting" rows="4" placeholder="tag-urile tale"></textarea>
           <div class="row">
-            <button id="tagGo">generează tag-urile</button>
-            <button id="tagCopy" class="ghost hidden">copiază lista</button>
+            <button id="tagGo">actualizează</button>
+            <button id="tagCopy" class="ghost hidden">copiază ce încape</button>
+            <button id="tagCopyAll" class="ghost hidden">copiază tot</button>
             <span class="muted" id="tagCount"></span>
           </div>
         </div>
+        <div id="tagStats" class="chips small" style="margin-top:12px"></div>
         <ol id="tagList" class="tags"></ol>
-        <details id="tagDroppedBox" class="hidden">
-          <summary>Scoase din listă <span id="tagDroppedCount"></span></summary>
-          <div id="tagDropped" class="chips small"></div>
-        </details>
       </section>
 
       <section class="card">

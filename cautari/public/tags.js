@@ -1,5 +1,7 @@
-// Generator de tag-uri pe bază de dovezi: ce caută lumea real (autocomplete RO) și ce
-// interogări chiar aduc canalul în rezultate. Pur — fără DOM.
+// Generator de tag-uri pe dovezi.
+// Regula de bază: tag-urile utilizatorului NU se șterg. Fiecare primește un verdict
+// (aduce canalul / apare în căutări reale / fără dovezi în eșantion) și un loc în lista
+// de 500 de caractere. Ce nu încape rămâne marcat, nu dispare.
 
 const norm = (s) =>
   String(s || '')
@@ -10,156 +12,199 @@ const norm = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-// nume de creatori / canale — tag-uri cu ele nu ajută, doar umplu limita
-const CREATORS = new Set(
-  norm(
-    `izentric nocivanu skincraft iraphahell isilent xslayder ihatepink iugin highman maxinfinite
-     marius iancu snik codrin rapha werty zbir bercea sora sammy viktoria berceni justitiarul
-     mrbeast pewdiepie sssniperwolf`,
-  ).split(' '),
+const toks = (s) => norm(s).split(' ').filter(Boolean);
+
+/** Expresia apare ca frază întreagă în text? (`cat` nu se potrivește cu `catel`) */
+function hasPhrase(termTokens, tagTokens) {
+  if (!tagTokens.length || tagTokens.length > termTokens.length) return false;
+  for (let i = 0; i <= termTokens.length - tagTokens.length; i += 1) {
+    let ok = true;
+    for (let j = 0; j < tagTokens.length; j += 1) {
+      if (termTokens[i + j] !== tagTokens[j]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+const GENERIC = new Set(
+  norm(`youtube video videos live stream streaming gaming game joc jocuri update speed demo reactor
+        cartoon cat the and for you new nou ro v 2 3 4 5 romania romana romane`).split(' '),
 );
 
 const STOP = new Set(
-  norm(
-    `a ai al ale am are asa asta au ca cam care ce cel ceva cine cum cu da dar de din doar dupa ea ei el
-     ele era este eu fac fara fi fie fost iar il in la le lui mai ma mea mi mult nu o ori pe pentru
-     peste sa sai sau se si sunt ta tale tau te ti toata toate tot totul tu un una unde va vom vor
-     vs the and for you your new nou no`,
-  ).split(' '),
+  norm(`a ai al ale am are asa asta au ca cam care ce cel ceva cine cum cu da dar de din doar dupa ea ei el
+    ele era este eu fac fara fi fie fost iar il in la le lui mai ma mea mi mult nu o ori pe pentru peste sa
+    sai sau se si sunt ta tale tau te ti toata toate tot totul tu un una unde va vom vor vs the and for you
+    your new nou no`).split(' '),
 );
-
-const GENERIC = new Set(
-  norm(`youtube video videos joc jocuri gaming game romania romana romane ro online free gratis hd 4k`).split(' '),
-);
-
-const KIND_ORDER = { titlu: 0, aduce: 1, cautat: 2, creator: 3, existent: 4, generic: 5 };
 
 /**
  * @param {object} o
- * @param {string} o.title            titlul videoclipului
- * @param {string} [o.existing]       tag-urile pe care le folosești deja (virgulă)
- * @param {Array}  [o.terms]          termeni reali din autocomplete: {term, score}
- * @param {Array}  [o.tested]         interogări testate: {query, position|null}
- * @param {Array}  [o.matches]        interogările care aduc canalul: {query, position}
- * @param {number} [o.maxChars]       limita YouTube (500)
+ * @param {string} o.title      titlul videoclipului (opțional)
+ * @param {Array} o.myTags      tag-urile utilizatorului (nu se șterg)
+ * @param {Array} o.terms       căutări reale: {term, score}
+ * @param {Array} o.tested      interogări testate: {query, position|null}
+ * @param {Array} o.matches     interogări care aduc canalul: {query, position}
+ * @param {number} [o.maxChars] limita YouTube (500)
+ * @param {number} [o.maxTags]  plafon de tag-uri (25)
  */
-export function buildTags({ title = '', existing = '', terms = [], tested = [], matches = [], maxChars = 500, maxTags = 25 } = {}) {
+export function buildTags({ title = '', myTags = [], terms = [], matches = [], maxChars = 500, maxTags = 40, maxNew = 10 } = {}) {
   const titleClean = String(title).trim();
-  const titleTokens = norm(titleClean).split(' ').filter((t) => t.length >= 3 && !STOP.has(t));
+  const titleTokens = toks(titleClean).filter((t) => t.length >= 3 && !STOP.has(t));
+  const matchByQuery = new Map((matches || []).map((m) => [norm(m.query), m]));
+  const termList = (terms || []).map((t) => {
+    const term = typeof t === 'string' ? t : t.term;
+    return { term, tokens: toks(term), score: Number(typeof t === 'object' ? t.score : 0) || 0 };
+  });
+
   const warnings = [];
+  const items = [];
+  const myKeys = new Set();
 
-  const matchByQuery = new Map(matches.map((m) => [norm(m.query), m.position]));
-  const positionByQuery = new Map(
-    (tested || []).filter((t) => t.position).map((t) => [norm(t.query), t.position]),
-  );
+  if (titleClean) {
+    items.push({ tag: titleClean, origin: 'al-tau', kind: 'titlu', why: 'titlul exact — cea mai bună potrivire' });
+  }
 
-  const entries = new Map();
-  const dropped = [];
-  const push = (tag, kind, why, extra = {}) => {
+  // ---- 1. tag-urile utilizatorului, cu verdict ----
+  for (const tag of myTags) {
     const key = norm(tag);
-    if (!key || key.length < 3) return;
-    const current = entries.get(key);
-    if (current && KIND_ORDER[current.kind] <= KIND_ORDER[kind]) return;
-    entries.set(key, { tag: tag.trim(), kind, why, ...extra });
+    if (!key || myKeys.has(key)) continue;
+    myKeys.add(key);
+    const tt = toks(tag);
+
+    const singleGeneric = tt.length === 1 && (GENERIC.has(tt[0]) || STOP.has(tt[0]) || tt[0].length <= 2);
+    const hit = [...matchByQuery.entries()].find(([q]) => hasPhrase(toks(q), tt));
+    if (hit) {
+      items.push({
+        tag,
+        origin: 'al-tau',
+        kind: 'aduce',
+        position: hit[1].position,
+        why: `poziția #${hit[1].position} în căutare`,
+      });
+      continue;
+    }
+
+    if (singleGeneric) {
+      items.push({
+        tag,
+        origin: 'al-tau',
+        kind: 'generic',
+        why: 'prea generic — umple limita de 500, nu aduce nimic',
+      });
+      continue;
+    }
+
+    const found = termList.filter((t) => hasPhrase(t.tokens, tt));
+    if (found.length) {
+      items.push({
+        tag,
+        origin: 'al-tau',
+        kind: 'cautat',
+        hits: found.length,
+        example: found.sort((a, b) => b.score - a.score)[0].term,
+        why: `apare în ${found.length} căutări reale (ex. „${found.sort((a, b) => b.score - a.score)[0].term}")`,
+      });
+      continue;
+    }
+
+    const generic = false;
+    items.push({
+      tag,
+      origin: 'al-tau',
+      kind: generic ? 'generic' : 'fara-dovezi',
+      why: generic ? 'prea generic, fără dovezi' : 'fără dovezi în eșantionul de azi',
+    });
+  }
+
+  // ---- 2. adăugiri: căutări reale legate de titlu, care nu sunt deja în listă ----
+  const additions = [];
+  const seenAdd = new Set();
+  const add = (term, kind, why, extra = {}) => {
+    const key = norm(term);
+    if (!key || myKeys.has(key) || seenAdd.has(key)) return;
+    seenAdd.add(key);
+    additions.push({ tag: term, origin: 'nou', kind, why, ...extra });
   };
 
-  // 1. titlul exact — YouTube îl potrivește cel mai bine
-  if (titleClean) push(titleClean, 'titlu', 'titlul exact: cea mai bună potrivire pentru căutarea video', {});
-
-  // 2. interogările care chiar aduc canalul
-  for (const [query, position] of positionByQuery) {
-    const tokens = query.split(' ');
-    const relates = tokens.some((t) => titleTokens.includes(t)) || titleTokens.length === 0;
-    if (!relates) continue;
-    push(query, 'aduce', `poziția #${position} în căutarea YouTube`, { position });
+  for (const [query, m] of matchByQuery) {
+    const tokens = toks(query);
+    const relates = !titleTokens.length || tokens.some((t) => titleTokens.includes(t));
+    if (relates) add(query, 'aduce', `poziția #${m.position} în căutare`, { position: m.position });
   }
 
-  // 3. termeni reali din autocomplete, legați de titlu
-  for (const item of terms) {
-    const term = typeof item === 'string' ? item : item.term;
-    if (!term) continue;
-    const tokens = norm(term).split(' ');
-    const overlap = tokens.filter((t) => titleTokens.includes(t)).length;
+  for (const t of termList) {
+    if (!t.term) continue;
+    const overlap = t.tokens.filter((x) => titleTokens.includes(x)).length;
     if (!overlap) continue;
-    if (tokens.every((t) => GENERIC.has(t) || STOP.has(t))) continue;
-    const score = Number(item.score) || 0;
-    const creatorBased = tokens.some((t) => CREATORS.has(t));
-    push(
-      term,
-      creatorBased ? 'creator' : 'cautat',
-      creatorBased
-        ? `căutare reală, dar e numele altui creator · scor ${Math.round(score)}`
-        : `căutare reală în RO · scor ${Math.round(score)}`,
-      { score, position: matchByQuery.get(norm(term)) || null },
-    );
+    if (t.tokens.every((x) => STOP.has(x))) continue;
+    add(t.term, 'cautat', `căutare reală · scor ${Math.round(t.score)}`, { score: t.score });
   }
 
-  // 4. tag-urile existente, triate
-  const existingList = String(existing)
-    .split(/[,\n]/)
-    .flatMap((chunk) => {
-      const t = chunk.trim();
-      // lipit fără virgule: îl spargem în cuvinte, altfel devine un singur „tag" gigantic
-      if (t.length > 40 && !t.includes(',')) return t.split(/\s+/);
-      return [t];
-    })
-    .map((t) => t.trim())
-    .filter(Boolean);
-  for (const tag of existingList) {
-    const key = norm(tag);
-    const tokens = key.split(' ');
-    if (tokens.some((t) => CREATORS.has(t))) {
-      push(tag, 'creator', 'nume de creator — păstrează-l doar dacă e canalul tău');
-      continue;
-    }
-    if (tokens.every((t) => GENERIC.has(t) || STOP.has(t))) {
-      dropped.push({ tag, why: 'prea generic — concurență uriașă, nimic specific' });
-      continue;
-    }
-    if (tokens.length === 1 && tokens[0].length < 4) {
-      dropped.push({ tag, why: 'prea scurt — YouTube îl ignoră' });
-      continue;
-    }
-    push(tag, 'existent', 'tag existent, păstrat');
-  }
-
-  // 5. sortare + umplere până la limita de caractere
-  const sorted = [...entries.values()].sort(
+  additions.sort(
     (a, b) =>
-      KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
+      (a.kind === 'aduce' ? 0 : 1) - (b.kind === 'aduce' ? 0 : 1) ||
       (a.position || 99) - (b.position || 99) ||
-      (b.score || 0) - (a.score || 0) ||
-      b.tag.length - a.tag.length,
+      (b.score || 0) - (a.score || 0),
   );
 
-  const tags = [];
+  // ---- 3. ordinea finală ----
+  const rank = (it) => {
+    if (it.kind === 'titlu') return 0;
+    if (it.origin === 'al-tau' && it.kind === 'aduce') return 1;
+    if (it.origin === 'nou' && it.kind === 'aduce') return 2;
+    if (it.origin === 'nou') return 3;
+    if (it.origin === 'al-tau' && it.kind === 'cautat') return 4;
+    return 5;
+  };
+  const all = [...items, ...additions].sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      (a.position || 99) - (b.position || 99) ||
+      (b.hits || 0) - (a.hits || 0) ||
+      (b.score || 0) - (a.score || 0),
+  );
+
+  // ---- 4. umplerea bugetului de 500 de caractere ----
   let chars = 0;
-  // diversitate: max 4 tag-uri care încep la fel, ca lista să nu fie „gta 6" × 15
-  const prefixCount = new Map();
-  for (const entry of sorted) {
-    if (tags.length >= maxTags) {
-      dropped.push({ tag: entry.tag, why: `peste plafonul de ${maxTags} tag-uri` });
-      continue;
+  let count = 0;
+  let newUsed = 0;
+  for (const it of all) {
+    const cost = it.tag.length + (count ? 2 : 0);
+    const newFull = it.origin === 'nou' && newUsed >= maxNew;
+    const fits = !newFull && count < maxTags && chars + cost <= maxChars;
+    it.fits = fits;
+    if (fits) {
+      chars += cost;
+      count += 1;
+      if (it.origin === 'nou') newUsed += 1;
     }
-    const add = entry.tag.length + (tags.length ? 2 : 0);
-    if (chars + add > maxChars) {
-      dropped.push({ tag: entry.tag, why: `nu încape în ${maxChars} caractere` });
-      continue;
-    }
-    const prefix = norm(entry.tag).split(' ').slice(0, 2).join(' ');
-    const used = prefixCount.get(prefix) || 0;
-    if (used >= 4) {
-      dropped.push({ tag: entry.tag, why: 'a cincea variantă a aceleiași expresii — nu mai ajută' });
-      continue;
-    }
-    prefixCount.set(prefix, used + 1);
-    chars += add;
-    tags.push(entry);
   }
 
-  if (!titleClean) warnings.push('Pune titlul videoclipului: fără el, tag-urile sunt ghicituri.');
-  if (titleClean.length > 70) warnings.push('Titlul are peste 70 de caractere — YouTube îl taie în rezultate.');
-  if (!matchByQuery.size) warnings.push('Nu există interogări care să aducă canalul în datele curente.');
+  const stats = {
+    mine: items.length,
+    aduce: items.filter((i) => i.kind === 'aduce').length + additions.filter((i) => i.kind === 'aduce').length,
+    cautat: items.filter((i) => i.kind === 'cautat').length,
+    faraDovezi: items.filter((i) => i.kind === 'fara-dovezi' || i.kind === 'generic').length,
+    additions: additions.length,
+    used: count,
+    chars,
+    maxChars,
+  };
 
-  return { tags, dropped, chars, maxChars, warnings, titleTokens };
+  if (!titleClean) warnings.push('Fără titlu, adăugirile sunt alese doar după dovezi — pune titlul pentru tag-uri pe video.');
+  if (!termList.length) warnings.push('Fără căutări reale încărcate — verdictul „cautat" nu poate fi calculat.');
+
+  return {
+    items: all,
+    copyFits: all.filter((i) => i.fits).map((i) => i.tag.toLowerCase()).join(', '),
+    copyAll: all.map((i) => i.tag.toLowerCase()).join(', '),
+    stats,
+    warnings,
+    titleTokens,
+  };
 }

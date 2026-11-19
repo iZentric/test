@@ -177,3 +177,10 @@ details[open] summary { margin-bottom: 12px; }
 .k-exezistent, .k-existent { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; }
 .k-titlu { background: rgba(167, 139, 250, 0.16); color: #c4b5fd; }
 @media (max-width: 640px) { .tags li { grid-template-columns: 22px 1fr; } .tags .why { grid-column: 2; text-align: left; } }
+
+/* ---- tag-uri: cele care nu încap ---- */
+.tags li.over { opacity: 0.62; }
+.tags li.over .tg { text-decoration: none; }
+.k-origin { background: rgba(148, 163, 184, 0.10); color: #94a3b8; }
+.k-fara-dovezi { background: rgba(148, 163, 184, 0.12); color: #b6c2d3; }
+.k-generic { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }

@@ -1,6 +1,7 @@
 // Tot ce face pagina: ia /api/data o dată și desenează listele. Nimic altceva.
 
 import { buildTags } from './tags.js';
+import { MY_TAGS } from './my-tags.js';
 
 const $ = (sel) => document.querySelector(sel);
 const nf = new Intl.NumberFormat('ro-RO');
@@ -117,65 +118,74 @@ const KIND_LABEL = {
   titlu: 'titlu',
   aduce: 'aduce canalul',
   cautat: 'căutare reală',
-  creator: 'creator',
-  existent: 'existent',
+  'fara-dovezi': 'fără dovezi',
+  generic: 'generic',
 };
+
+let lastResult = null;
+
+function myTagsFromInput() {
+  return $('#tagExisting')
+    .value.split(/[,\n]/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
 
 function renderTags() {
   const title = $('#tagTitle').value.trim();
-  const existing = $('#tagExisting').value;
   const result = buildTags({
     title,
-    existing,
+    myTags: myTagsFromInput(),
     terms: state.harvest?.terms || [],
-    tested: state.channel?.tested || [],
     matches: state.channel?.matches || [],
   });
+  lastResult = result;
 
-  state.lastTags = result.tags;
-
+  const st = result.stats;
   $('#tagSub').textContent = title
-    ? `${result.tags.length} tag-uri · ${result.chars}/${result.maxChars} caractere`
+    ? `${st.used} tag-uri încap · ${st.chars}/${st.maxChars} caractere`
     : 'pune titlul videoclipului';
-  $('#tagCount').textContent = result.tags.length ? `${result.chars}/${result.maxChars} caractere` : '';
-  $('#tagCopy').classList.toggle('hidden', !result.tags.length);
+  $('#tagCount').textContent = `${st.chars}/${st.maxChars} caractere`;
+  $('#tagCopy').classList.toggle('hidden', !result.items.length);
+  $('#tagCopyAll').classList.toggle('hidden', !result.items.length);
 
-  $('#tagList').innerHTML = result.tags
+  $('#tagStats').innerHTML = [
+    ['tag-urile tale', st.mine],
+    ['aduc canalul', st.aduce],
+    ['apar în căutări reale', st.cautat],
+    ['fără dovezi azi', st.faraDovezi],
+    ['adăugate noi', st.additions],
+  ]
+    .map(([k, v]) => `<span class="chip">${esc(k)} <b>${nf.format(v)}</b></span>`)
+    .join('');
+
+  $('#tagList').innerHTML = result.items
     .map(
-      (t, i) => `<li>
-        <span class="n">${i + 1}</span>
-        <span class="tg"><span class="k k-${esc(t.kind)}">${esc(KIND_LABEL[t.kind] || t.kind)}</span>${esc(t.tag)}</span>
-        <span class="why">${esc(t.why)}</span>
+      (it, i) => `<li class="${it.fits ? '' : 'over'}">
+        <span class="n">${it.fits ? i + 1 : '—'}</span>
+        <span class="tg">
+          <span class="k k-${esc(it.kind)}">${esc(KIND_LABEL[it.kind] || it.kind)}</span>
+          <span class="k k-origin">${it.origin === 'nou' ? 'nou' : 'al tău'}</span>
+          ${esc(it.tag)}
+        </span>
+        <span class="why">${esc(it.fits ? it.why : `nu încape · ${it.why}`)}</span>
       </li>`,
     )
     .join('');
-
-  const dropped = result.dropped.slice(0, 120);
-  $('#tagDroppedBox').classList.toggle('hidden', !dropped.length);
-  $('#tagDroppedCount').textContent = `(${result.dropped.length})`;
-  $('#tagDropped').innerHTML = dropped
-    .map((d) => `<span class="chip" title="${esc(d.why)}">${esc(d.tag)}</span>`)
-    .join('');
-
-  if (result.warnings.length) {
-    $('#tagSub').textContent = result.warnings[0];
-  }
 }
 
-async function copyTags() {
-  const text = state.lastTags.map((t) => t.tag.toLowerCase()).join(', ');
-  const btn = $('#tagCopy');
+async function copyInto(text, btn) {
+  const old = btn.textContent;
   try {
     await navigator.clipboard.writeText(text);
-    const old = btn.textContent;
     btn.textContent = 'copiat';
-    setTimeout(() => {
-      btn.textContent = old;
-    }, 1600);
   } catch {
     console.log(text);
     btn.textContent = 'copiere blocată';
   }
+  setTimeout(() => {
+    btn.textContent = old;
+  }, 1600);
 }
 
 async function init() {
@@ -203,11 +213,14 @@ async function init() {
   renderTerms();
   renderNoMatch();
 
+  $('#tagExisting').value = MY_TAGS.join(', ');
   $('#tagGo').addEventListener('click', renderTags);
   $('#tagTitle').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') renderTags();
   });
-  $('#tagCopy').addEventListener('click', copyTags);
+  $('#tagCopy').addEventListener('click', () => lastResult && copyInto(lastResult.copyFits, $('#tagCopy')));
+  $('#tagCopyAll').addEventListener('click', () => lastResult && copyInto(lastResult.copyAll, $('#tagCopyAll')));
+  renderTags();
 
   $('#search').addEventListener('input', renderTerms);
   $('#onlyMatched').addEventListener('change', renderTerms);
