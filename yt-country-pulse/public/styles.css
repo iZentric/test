@@ -599,3 +599,64 @@ footer {
 .day-list li { font-size: 13px; color: #d5dcea; }
 .day-list li .cat { font-size: 11px; color: #7f8a9f; margin-left: 8px; }
 .day-list li .t { color: #ff8a3d; font-size: 11.5px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+
+/* ---------- analiză canal (vidIQ CSV) ---------- */
+.vz-drop {
+  border: 1.5px dashed #2f3a4e;
+  border-radius: 14px;
+  padding: 18px 20px;
+  text-align: center;
+  background: #131a25;
+  transition: border-color 0.15s, background 0.15s;
+}
+.vz-drop.over { border-color: var(--accent); background: #16202e; }
+.vz-drop p { margin: 4px 0; }
+.vz-paste { margin-top: 12px; }
+.vz-paste summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+.vz-paste textarea {
+  width: 100%;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0e141d;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.vz-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+.field-inline { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.field-inline select {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #131a25;
+  color: var(--text);
+  font-size: 12.5px;
+}
+.kw-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .kw-cols { grid-template-columns: 1fr; } }
+.kw-cols h3 { margin: 0 0 8px; font-size: 11.5px; letter-spacing: 0.7px; text-transform: uppercase; color: var(--muted); }
+.kw-cols .table-wrap { max-height: 340px; }
+.tnum { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.title-cell { max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title-cell a { color: var(--text); text-decoration: none; }
+.title-cell a:hover { color: var(--accent-2); text-decoration: underline; }
+.chip-short {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.3px;
+  background: rgba(255, 107, 107, 0.14);
+  color: #ffb3b3;
+  vertical-align: middle;
+}
+.vz-days { display: flex; flex-direction: column; gap: 6px; }
+.vz-day { display: grid; grid-template-columns: 92px 1fr auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.vz-day .d { color: var(--muted); font-variant-numeric: tabular-nums; }
+.vz-day .bar { height: 8px; border-radius: 4px; background: #1a2231; overflow: hidden; }
+.vz-day .bar i { display: block; height: 100%; background: linear-gradient(90deg, #2f6df6, #4fc3f7); border-radius: 4px; }
+.vz-day .v { color: #cfd7e6; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kw-none { color: var(--muted); font-size: 12.5px; line-height: 1.45; white-space: normal; }

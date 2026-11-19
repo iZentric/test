@@ -86,6 +86,22 @@ Rulare: ~50–100 de cereri, 40–90 de secunde. Pauze între cereri (220 ms + j
 - **`q=` gol nu întoarce nimic.** Ideea că un query gol îți dă „top 10 căutări" e falsă; se vede și în dump-ul de referință (`[GLOBAL_EMPTY_Q] -> ` gol).
 - Endpoint public, neoficial, fără autentificare. Uz personal / cercetare, cu pauze. Nu e „hack", dar nici garantat stabil.
 
+## Analiză canal din export vidIQ (CSV)
+
+Tab nou, 100% local (nimic nu pleacă pe server): tragi în pagină un export CSV din vidIQ — de canal, de „top videos", sau orice tabel cu coloanele `TITLE`, `VIEWS`, `KEYWORDS`, `DURATION`, `DATE PUBLISHED`, `VIDIQ SCORE` — și primești pe loc:
+
+- **sumar**: videoclipuri, views total / medie / mediană, like rate, comment rate, interval de date, ritm de publicare (clipuri/zi), scor vidIQ mediu;
+- **shorts vs. video lung** (short = ≤ 60 s): câte sunt din fiecare și views medii pe fiecare tip;
+- **corelația scor vidIQ ↔ views** (Pearson, log-views) — ca să vezi dacă scorul chiar prezice ceva pe canalul respectiv;
+- **keywords**: împărțite în *comune* (apar în peste 70% din videoclipuri — de obicei tag-uri copiate pe tot canalul) și *distinctive* (apar în puține — acolo e subiectul real). Dacă toate tag-urile sunt identice, pagina o spune direct în loc să inventeze o separare;
+- **cuvinte și expresii (2 cuvinte) din titluri**, cu stopwords RO+EN scoase și views medii pe termen — așa iese la iveală o temă repetată (ex. „pam pam", „hot dog");
+- **publicare pe zile** cu bare proportionale cu views-urile;
+- sortare a tabelului după views / scor / dată / engagement / durată, export **JSON** și „copiază keywords".
+
+CSV-ul se salvează în `localStorage` (până la ~2 MB), deci după refresh analiza e tot acolo. Parserul e propriu (RFC 4180: ghilimele, `""`, diacritice, BOM, CRLF), fără dependințe.
+
+**Ce nu e:** keywords-urile sunt tag-urile videoclipului, nu ce a căutat lumea; scorul vidIQ nu e volum de căutări; views-urile sunt cumulate pe viața videoclipului, deci un clip vechi are avantaj față de unul de ieri.
+
 ## Ce e posibil și ce nu (important)
 
 Google **nu** publică o listă completă de tipul „toate căutările făcute pe YouTube în România". Nu există API, dataset sau endpoint public pentru asta — nici oficial, nici „pe sub masă". Ce există e **top-ul zilei**: ~20 de interogări pe zi și pe țară.
@@ -240,7 +256,7 @@ yt-country-pulse/
 │   ├── cache.js         # cache pe disc cu TTL
 │   ├── countries.js     # 63 de țări
 │   └── demo.js          # generator determinist de eșantioane
-├── public/              # index.html + app.js (vanilla) + styles.css
+├── public/              # index.html + app.js (vanilla) + vidiq.js (analiză CSV) + styles.css
 └── data/collections/    # rezultatele colectărilor (gitignore)
 ```
 

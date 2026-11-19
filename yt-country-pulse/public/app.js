@@ -1,5 +1,7 @@
 // UI — vanilă, fără framework. Vorbește doar cu /api/pulse.
 
+import { analyzeCsv } from './vidiq.js';
+
 const $ = (sel) => document.querySelector(sel);
 
 const state = {
@@ -7,6 +9,8 @@ const state = {
   lastPayload: null,
   busy: false,
   activeView: 'day',
+  vidiq: null,
+  vidiqSort: 'views',
 };
 
 const nf = new Intl.NumberFormat('ro-RO');
@@ -72,6 +76,7 @@ async function init() {
   initTabs();
   await initRange();
   await initHarvest();
+  initVidiq();
 
   await load();
   if (state.activeView !== 'range') switchTab('day');
@@ -614,6 +619,10 @@ function refreshPill() {
     const demo = harv.result.stats?.demo;
     return setPill(demo ? 'demo' : 'live', demo ? 'sugestii demo' : 'sugestii live');
   }
+  if (state.activeView === 'vidiq') {
+    if (!state.vidiq || !state.vidiq.videos.length) return setPill('idle', 'fără fișier');
+    return setPill('live', `csv local · ${state.vidiq.videos.length} clipuri`);
+  }
   if (state.activeView === 'range') {
     if (range.job && ['running', 'queued', 'cancelling'].includes(range.job.status)) return setPill('busy', 'colectez');
     if (!range.result) return setPill('idle', 'în așteptare');
@@ -627,7 +636,7 @@ function refreshPill() {
 }
 
 function switchTab(name) {
-  state.activeView = ['range', 'harvest'].includes(name) ? name : 'day';
+  state.activeView = ['range', 'harvest', 'vidiq'].includes(name) ? name : 'day';
   document.querySelectorAll('.tab').forEach((b) => {
     const on = b.dataset.tab === state.activeView;
     b.classList.toggle('active', on);
@@ -636,6 +645,7 @@ function switchTab(name) {
   $('#view-day').classList.toggle('hidden', state.activeView !== 'day');
   $('#view-range').classList.toggle('hidden', state.activeView !== 'range');
   $('#view-harvest').classList.toggle('hidden', state.activeView !== 'harvest');
+  $('#view-vidiq').classList.toggle('hidden', state.activeView !== 'vidiq');
   refreshPill();
 }
 
@@ -1694,6 +1704,292 @@ function exportHarvestCsv() {
     );
   });
   download(`youtube-sugestii-${r.geo}.csv`, `\uFEFF${lines.join('\n')}`, 'text/csv;charset=utf-8');
+}
+
+/* ---------------- analiză canal (export CSV vidIQ) ---------------- */
+
+const vzInt = (n) => nf.format(Math.round(Number(n) || 0));
+const vzPct = (x) => `${(Number(x) * 100).toFixed(2)}%`;
+const vzDur = (s) => {
+  const t = Math.round(Number(s) || 0);
+  if (!t) return '—';
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const sec = t % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+};
+const vzDate = (iso) => (iso ? iso.split('-').reverse().join('.') : '—');
+
+function showVidiqWarnings(list) {
+  const box = $('#vzWarn');
+  if (!list || !list.length) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = list
+    .map((w) => {
+      const ico = w.level === 'error' ? '⛔' : w.level === 'info' ? 'ℹ' : '⚠';
+      return `<div class="warn-item ${w.level === 'error' ? 'error' : ''}"><span class="ico">${ico}</span><span>${esc(w.text)}</span></div>`;
+    })
+    .join('');
+}
+
+function initVidiq() {
+  $('#vzPick').addEventListener('click', () => $('#vzFile').click());
+  $('#vzFile').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) await loadVidiqFile(file);
+  });
+
+  const drop = $('#vzDrop');
+  for (const ev of ['dragenter', 'dragover']) {
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.add('over');
+    });
+  }
+  for (const ev of ['dragleave', 'drop']) {
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.remove('over');
+    });
+  }
+  drop.addEventListener('drop', async (e) => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) await loadVidiqFile(file);
+  });
+
+  $('#vzParsePaste').addEventListener('click', () => {
+    const text = $('#vzPaste').value.trim();
+    if (!text) return showVidiqWarnings([{ level: 'error', text: 'Lipește întâi CSV-ul.' }]);
+    ingestVidiq(text, 'text lipit');
+  });
+
+  $('#vzSort').value = state.vidiqSort;
+  $('#vzSort').addEventListener('change', () => {
+    state.vidiqSort = $('#vzSort').value;
+    renderVidiqVideos();
+  });
+
+  $('#vzExport').addEventListener('click', exportVidiq);
+  $('#vzCopyKw').addEventListener('click', copyVidiqKeywords);
+  $('#vzClear').addEventListener('click', () => {
+    localStorage.removeItem('ytp.vidiq');
+    state.vidiq = null;
+    $('#vzPaste').value = '';
+    renderVidiq();
+    refreshPill();
+  });
+
+  const saved = localStorage.getItem('ytp.vidiq');
+  if (saved) {
+    try {
+      const obj = JSON.parse(saved);
+      if (obj && obj.csv) ingestVidiq(obj.csv, obj.name || 'fișier salvat', { silent: true });
+    } catch {
+      localStorage.removeItem('ytp.vidiq');
+    }
+  }
+  renderVidiq();
+}
+
+async function loadVidiqFile(file) {
+  try {
+    const text = await file.text();
+    ingestVidiq(text, file.name || 'export.csv');
+  } catch (err) {
+    showVidiqWarnings([{ level: 'error', text: `Nu am putut citi fișierul: ${err.message}` }]);
+  }
+}
+
+function ingestVidiq(text, name, { silent = false } = {}) {
+  const result = analyzeCsv(text, { fileName: name });
+  state.vidiq = result;
+  try {
+    if (text.length <= 2_000_000) localStorage.setItem('ytp.vidiq', JSON.stringify({ name, csv: text }));
+    else if (!silent) showVidiqWarnings([{ level: 'info', text: 'Fișierul e mare — analiza merge, dar nu îl pot ține minte după refresh.' }]);
+  } catch {
+    /* quota depășită — analiza rămâne în memorie */
+  }
+  renderVidiq();
+  refreshPill();
+  return result;
+}
+
+function renderVidiq() {
+  const r = state.vidiq;
+  const has = Boolean(r && r.videos.length);
+
+  $('#vzActions').classList.toggle('hidden', !has);
+  $('#vzSource').textContent = has
+    ? `${r.fileName} · ${vzInt(r.videos.length)} videoclipuri · ${r.columns.length} coloane`
+    : 'niciun fișier încărcat';
+
+  if (!has) {
+    $('#vzStats').innerHTML = '';
+    for (const id of ['#vzVideoBody', '#vzKwCommonBody', '#vzKwRareBody', '#vzWordBody', '#vzBigramBody', '#vzDays']) {
+      $(id).innerHTML = '';
+    }
+    $('#vzVideoSub').textContent = '';
+    $('#vzKwSub').textContent = '';
+    $('#vzDaysSub').textContent = '';
+    showVidiqWarnings(r && r.warnings ? r.warnings.map((t) => ({ level: 'error', text: t })) : []);
+    return;
+  }
+
+  showVidiqWarnings(r.warnings.map((t) => ({ level: 'info', text: t })));
+
+  const s = r.summary;
+  $('#vzStats').innerHTML = [
+    { k: 'Videoclipuri', v: vzInt(s.count), m: s.spanDays ? `${vzDate(s.dateFrom)} → ${vzDate(s.dateTo)} · ${s.spanDays} zile` : '' },
+    { k: 'Views total', v: vzInt(s.totalViews), m: `medie ${vzInt(s.avgViews)} · mediană ${vzInt(s.medianViews)}` },
+    { k: 'Like / comentarii', v: `${vzPct(s.likeRate)}`, m: `${vzInt(s.totalLikes)} like · ${vzInt(s.totalComments)} comentarii · ${vzPct(s.commentRate)}` },
+    {
+      k: 'Shorts vs. video lung',
+      v: `${s.shorts.count} / ${s.longs.count}`,
+      m: `short mediu ${vzInt(s.shorts.avgViews)} · lung mediu ${vzInt(s.longs.avgViews)}`,
+    },
+    {
+      k: 'Scor vidIQ mediu',
+      v: s.avgScore.toFixed(1),
+      m: `corelație cu views: ${s.cardScoreCorr >= 0 ? '+' : ''}${s.cardScoreCorr.toFixed(2)} (nu e cauzalitate)`,
+    },
+    { k: 'Ritm de publicare', v: `${s.uploadsPerDay.toFixed(1)}/zi`, m: s.spanDays ? `${s.count} videoclipuri în ${s.spanDays} zile` : '' },
+    {
+      k: 'Keywords distincte',
+      v: vzInt(s.distinctKeywords),
+      m: s.videosWithoutKeywords ? `${s.videosWithoutKeywords} videoclipuri fără keywords` : 'toate au keywords',
+    },
+  ]
+    .map((c) => `<div class="stat"><div class="k">${esc(c.k)}</div><div class="v">${esc(c.v)}</div><div class="m">${esc(c.m)}</div></div>`)
+    .join('');
+
+  renderVidiqVideos();
+  renderVidiqKeywords();
+  renderVidiqWords();
+  renderVidiqDays();
+}
+
+function vidiqSorted() {
+  const list = [...state.vidiq.videos];
+  const sort = state.vidiqSort;
+  const cmp = {
+    views: (a, b) => b.views - a.views,
+    score: (a, b) => b.score - a.score,
+    date: (a, b) => (a.dateISO < b.dateISO ? 1 : a.dateISO > b.dateISO ? -1 : b.views - a.views),
+    engagement: (a, b) => b.engagementRate - a.engagementRate,
+    duration: (a, b) => b.durationSec - a.durationSec,
+  }[sort] || ((a, b) => b.views - a.views);
+  return list.sort(cmp);
+}
+
+function renderVidiqVideos() {
+  const r = state.vidiq;
+  if (!r || !r.videos.length) return;
+  const rows = vidiqSorted();
+  const labels = { views: 'views', score: 'scor vidIQ', date: 'cele mai noi', engagement: 'engagement', duration: 'durată' };
+  $('#vzVideoSub').textContent = `${vzInt(rows.length)} videoclipuri · sortate după ${labels[state.vidiqSort] || 'views'}`;
+  $('#vzVideoBody').innerHTML = rows
+    .map(
+      (v, i) => `<tr>
+        <td class="tnum">${i + 1}</td>
+        <td class="title-cell">${v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.title)}</a>` : esc(v.title)}${v.isShort ? ' <span class="chip-short">short</span>' : ''}</td>
+        <td class="tnum">${esc(vzDate(v.dateISO))}</td>
+        <td class="tnum">${esc(vzDur(v.durationSec))}</td>
+        <td class="tnum num">${vzInt(v.views)}</td>
+        <td class="tnum num">${vzInt(v.likes)}</td>
+        <td class="tnum num">${vzInt(v.comments)}</td>
+        <td class="tnum num">${vzPct(v.engagementRate)}</td>
+        <td class="tnum num">${v.score.toFixed(1)}</td>
+        <td class="tnum num">${vzInt(v.keywords.length)}</td>
+      </tr>`,
+    )
+    .join('');
+}
+
+function renderVidiqKeywords() {
+  const r = state.vidiq;
+  if (!r || !r.videos.length) return;
+  const common = r.keywords.filter((k) => k.share >= 0.7);
+  const rare = r.keywords
+    .filter((k) => k.share < 0.7)
+    .sort((a, b) => a.videos - b.videos || b.avgViews - a.avgViews)
+    .slice(0, 60);
+  $('#vzKwSub').textContent = `${vzInt(r.keywords.length)} distincte · ${common.length} în peste 70% din videoclipuri · ${rare.length} distinctive`;
+
+  const row = (cells) => `<tr>${cells.map((c, i) => `<td${i ? ' class="tnum num"' : ''}>${c}</td>`).join('')}</tr>`;
+  $('#vzKwCommonBody').innerHTML = common.length
+    ? common.map((k) => row([esc(k.term), vzInt(k.videos), vzInt(k.views)])).join('')
+    : '<tr><td colspan="3">—</td></tr>';
+  $('#vzKwRareBody').innerHTML = rare.length
+    ? rare.map((k) => row([esc(k.term), vzInt(k.videos), vzInt(k.avgViews)])).join('')
+    : '<tr><td colspan="3" class="kw-none">Toate tag-urile se repetă în aproape toate videoclipurile — canalul folosește aceeași listă copiată. Nimic distinctiv de scos la iveală.</td></tr>';
+}
+
+function renderVidiqWords() {
+  const r = state.vidiq;
+  if (!r || !r.videos.length) return;
+  const row = (a) => `<tr><td>${esc(a.term)}</td><td class="tnum num">${vzInt(a.videos)}</td><td class="tnum num">${vzInt(a.avgViews)}</td></tr>`;
+  $('#vzWordBody').innerHTML = r.words.slice(0, 30).map(row).join('') || '<tr><td colspan="3">—</td></tr>';
+  const bigrams = [...r.bigrams].sort((a, b) => b.videos - a.videos || b.avgViews - a.avgViews);
+  $('#vzBigramBody').innerHTML = bigrams.slice(0, 30).map(row).join('') || '<tr><td colspan="3">—</td></tr>';
+}
+
+function renderVidiqDays() {
+  const r = state.vidiq;
+  if (!r || !r.videos.length) return;
+  const days = r.days.slice(0, 45);
+  const max = Math.max(...days.map((d) => d.views), 1);
+  $('#vzDaysSub').textContent = `${days.length} zile cu publicări · max ${vzInt(max)} views/zi`;
+  $('#vzDays').innerHTML = days
+    .map(
+      (d) => `<div class="vz-day">
+        <span class="d">${esc(vzDate(d.dateISO))}</span>
+        <span class="bar"><i style="width:${Math.max(2, Math.round((d.views / max) * 100))}%"></i></span>
+        <span class="v">${vzInt(d.views)} views · ${vzInt(d.videos)} clip${d.videos === 1 ? '' : 'uri'}</span>
+      </div>`,
+    )
+    .join('');
+}
+
+function exportVidiq() {
+  const r = state.vidiq;
+  if (!r || !r.videos.length) return;
+  const payload = {
+    fileName: r.fileName,
+    generatedAt: new Date().toISOString(),
+    summary: r.summary,
+    videos: r.videos,
+    keywords: r.keywords,
+    words: r.words,
+    bigrams: r.bigrams,
+    days: r.days,
+  };
+  download(
+    `analiza-canal-${(r.fileName || 'vidiq').replace(/\.csv$/i, '').replace(/[^\w.-]+/g, '-').slice(0, 40)}.json`,
+    JSON.stringify(payload, null, 2),
+    'application/json;charset=utf-8',
+  );
+}
+
+async function copyVidiqKeywords() {
+  const r = state.vidiq;
+  if (!r || !r.keywords.length) return;
+  const text = r.keywords.map((k) => k.term).join(', ');
+  const btn = $('#vzCopyKw');
+  const label = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = `copiat ${r.keywords.length} keywords`;
+  } catch {
+    btn.textContent = 'copiere blocată — vezi consola';
+    console.log(text);
+  }
+  setTimeout(() => {
+    btn.textContent = label;
+  }, 2200);
 }
 
 init();

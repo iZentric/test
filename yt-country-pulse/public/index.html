@@ -27,6 +27,7 @@
     <button class="tab active" data-tab="day" role="tab" aria-selected="true">O zi</button>
     <button class="tab" data-tab="range" role="tab" aria-selected="false">Tabel pe perioadă</button>
     <button class="tab" data-tab="harvest" role="tab" aria-selected="false">Sugestii (autocomplete)</button>
+    <button class="tab" data-tab="vidiq" role="tab" aria-selected="false">Analiză canal (vidIQ)</button>
   </nav>
 
   <main>
@@ -407,6 +408,122 @@
           din câte prefixe diferite iese la iveală. Autocomplete-ul nu publică cifre de volum, iar Google nu expune
           nicio listă completă de căutări. Coloana „Apare pentru" arată exact din ce prefixe a fost adunat termenul.
           Pentru „ce e în trend azi", folosește tabul <em>Tabel pe perioadă</em> (Google Trends).
+        </p>
+      </section>
+    </div>
+    <!-- ================= ANALIZĂ CANAL (CSV vidIQ) ================= -->
+    <div id="view-vidiq" class="view hidden">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Analiză canal din export vidIQ</h2>
+          <span class="panel-sub" id="vzSource">niciun fișier încărcat</span>
+        </div>
+        <div class="vz-drop" id="vzDrop">
+          <p><strong>Trage aici CSV-ul din vidIQ</strong> <span class="panel-sub">sau</span>
+            <button class="btn btn-ghost" id="vzPick" type="button">alege fișier</button></p>
+          <p class="panel-sub">Exportul de canal (Channel → Export CSV) sau orice tabel cu coloanele
+            TITLE, VIEWS, KEYWORDS, DURATION, DATE PUBLISHED, VIDIQ SCORE. Merge și cu mii de rânduri.</p>
+          <input type="file" id="vzFile" accept=".csv,text/csv,text/plain" hidden />
+        </div>
+        <details class="vz-paste">
+          <summary>sau lipește CSV-ul direct</summary>
+          <textarea id="vzPaste" rows="4" spellcheck="false" placeholder="ID,TITLE,DESCRIPTION,DURATION,STATUS,DATE PUBLISHED,KEYWORDS,..."></textarea>
+          <button class="btn" id="vzParsePaste" type="button">Analizează textul lipit</button>
+        </details>
+        <div id="vzWarn" class="warnings hidden" aria-live="polite"></div>
+        <div class="vz-actions hidden" id="vzActions">
+          <label class="field-inline">Sortare
+            <select id="vzSort">
+              <option value="views">views</option>
+              <option value="score">scor vidIQ</option>
+              <option value="date">cele mai noi</option>
+              <option value="engagement">engagement (like+com/views)</option>
+              <option value="duration">durată</option>
+            </select>
+          </label>
+          <button class="btn btn-ghost" id="vzExport" type="button">descarcă JSON</button>
+          <button class="btn btn-ghost" id="vzCopyKw" type="button">copiază keywords</button>
+          <button class="btn btn-ghost" id="vzClear" type="button">golește</button>
+        </div>
+      </section>
+
+      <section class="stats" id="vzStats"></section>
+
+      <section class="panel" id="vzVideoPanel">
+        <div class="panel-head">
+          <h2>Videoclipuri</h2>
+          <span class="panel-sub" id="vzVideoSub"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="vzVideos">
+            <thead>
+              <tr>
+                <th>#</th><th>Titlu</th><th>Publicat</th><th>Durată</th>
+                <th class="num">Views</th><th class="num">Like</th><th class="num">Com.</th>
+                <th class="num">Eng.</th><th class="num">Scor</th><th class="num">Keywords</th>
+              </tr>
+            </thead>
+            <tbody id="vzVideoBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Keywords</h2>
+          <span class="panel-sub" id="vzKwSub"></span>
+        </div>
+        <p class="panel-sub" style="margin:0 0 10px">
+          <strong>Comune</strong> = apar în aproape toate videoclipurile (tag-uri de canal, nu-ți spun mare lucru).
+          <strong>Distinctive</strong> = apar în puține videoclipuri — astea sunt subiectele care chiar diferă.
+          „Views” e suma views-urilor videoclipurilor care conțin tag-ul, deci e un semn de context, nu de volum de căutare.
+        </p>
+        <div class="kw-cols">
+          <div>
+            <h3>Comune (peste 70% din videoclipuri)</h3>
+            <div class="table-wrap"><table class="data-table" id="vzKwCommon"><thead><tr><th>Keyword</th><th class="num">Videoclipuri</th><th class="num">Views</th></tr></thead><tbody id="vzKwCommonBody"></tbody></table></div>
+          </div>
+          <div>
+            <h3>Distinctive</h3>
+            <div class="table-wrap"><table class="data-table" id="vzKwRare"><thead><tr><th>Keyword</th><th class="num">Videoclipuri</th><th class="num">Views medii</th></tr></thead><tbody id="vzKwRareBody"></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Cuvinte și expresii din titluri</h2>
+          <span class="panel-sub">ce repetă canalul în titluri</span>
+        </div>
+        <div class="kw-cols">
+          <div>
+            <h3>Cuvinte</h3>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>Cuvânt</th><th class="num">În</th><th class="num">Views medii</th></tr></thead><tbody id="vzWordBody"></tbody></table></div>
+          </div>
+          <div>
+            <h3>Expresii (2 cuvinte)</h3>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>Expresie</th><th class="num">În</th><th class="num">Views medii</th></tr></thead><tbody id="vzBigramBody"></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Ritm de publicare</h2>
+          <span class="panel-sub" id="vzDaysSub"></span>
+        </div>
+        <div id="vzDays" class="vz-days"></div>
+      </section>
+
+      <section class="panel sources">
+        <div class="panel-head"><h2>Ce e — și ce nu e</h2></div>
+        <p class="disclaimer">
+          Totul se calculează <strong>local, în browser</strong>, din fișierul tău: nu se trimite nimic pe server.
+          <strong>Scorul vidIQ nu e volum de căutări</strong> — e un scor intern al lor (0–100) pentru
+          „cât de bine e optimizat videoclipul”, deci corelația cu views e informativă, nu cauzală.
+          „Engagement” e (like + comentarii) / views. Shorts = videoclipuri de cel mult 60 de secunde.
+          Keywords-urile vin din tag-urile videoclipului, nu din ce a căutat lumea; pentru asta folosește
+          taburile <em>Tabel pe perioadă</em> sau <em>Sugestii</em>.
         </p>
       </section>
     </div>
