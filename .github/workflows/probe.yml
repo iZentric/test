@@ -1,0 +1,18 @@
+name: probe
+on:
+  push:
+    branches: ['arena/**']
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test acces la Google/YouTube din runner
+        run: |
+          set -x
+          node -v
+          curl -s -m 15 -o /tmp/sug.txt -w "suggest:%{http_code}\n" "https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&hl=ro&gl=ro&q=pam%20pam" || true
+          head -c 300 /tmp/sug.txt || true
+          echo
+          curl -s -m 15 -o /dev/null -w "trends:%{http_code}\n" "https://trends.google.com/trends/api/dailytrends?hl=ro&geo=RO" || true
+          curl -s -m 15 -o /dev/null -w "youtube:%{http_code}\n" "https://www.youtube.com/" || true
