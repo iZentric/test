@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Căutări reale pe YouTube · România</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="wrap">
+        <h1>Ce caută România pe YouTube</h1>
+        <p class="sub">
+          Date reale, luate din bara de căutare YouTube (autocomplete) și din rezultatele căutării.
+          Fără eșantioane, fără estimări inventate.
+        </p>
+        <div class="chips" id="chips"></div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div id="error" class="error hidden"></div>
+
+      <section class="card accent">
+        <div class="card-head">
+          <h2>Căutările care aduc canalul în rezultate</h2>
+          <span class="muted" id="matchSub">se încarcă…</span>
+        </div>
+        <p class="hint">
+          Pentru fiecare căutare s-a întrebat YouTube ce rezultate dă, iar apoi s-a verificat dacă un
+          videoclip al canalului apare în primele 20. Poziția e cea reală, la data rulării.
+        </p>
+        <div id="matches" class="matches"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Top căutări în România</h2>
+          <span class="muted" id="termsSub">se încarcă…</span>
+        </div>
+        <div class="controls">
+          <input id="search" type="search" placeholder="filtrează după text…" autocomplete="off" />
+          <label class="check"><input type="checkbox" id="onlyMatched" /> doar cele care aduc canalul</label>
+          <select id="count">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="all">toate</option>
+          </select>
+        </div>
+        <ol id="terms" class="terms"></ol>
+        <p class="muted center hidden" id="termsEmpty">Nimic pentru filtrul ăsta.</p>
+      </section>
+
+      <section class="card">
+        <details>
+          <summary>Testate, dar care <strong>nu</strong> aduc canalul <span id="noMatchCount"></span></summary>
+          <div id="noMatch" class="chips small"></div>
+        </details>
+      </section>
+
+      <section class="card note">
+        <h3>Ce înseamnă scorul</h3>
+        <p>
+          Scorul unei căutări <strong>nu e volum de căutări</strong> — autocomplete-ul nu publică cifre.
+          E un proxy calculat din poziția în sugestii și din câte prefixe diferite a ieșit termenul la iveală.
+          Bun pentru ordonare, nu pentru „X căutări pe lună”.
+        </p>
+        <p>
+          Datele sunt colectate de un crawler care rulează pe GitHub Actions (are acces la Google) și sunt
+          actualizate automat zilnic. Vezi fișierele brute: <a href="/api/data">/api/data</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer class="wrap foot">
+      <span id="footLeft"></span>
+      <span id="footRight"></span>
+    </footer>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
