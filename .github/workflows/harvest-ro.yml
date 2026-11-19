@@ -1,0 +1,55 @@
+name: harvest-ro
+on:
+  push:
+    branches: ['arena/**']
+    paths:
+      - '.github/workflows/harvest-ro.yml'
+      - 'yt-country-pulse/lib/harvest.js'
+      - 'yt-country-pulse/lib/suggest.js'
+  workflow_dispatch:
+
+concurrency:
+  group: harvest-ro-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Crawler de sugestii YouTube (RO, live)
+        working-directory: yt-country-pulse
+        run: |
+          node -v
+          node cli.js --harvest --geo RO --depth 2 --top 40 --json /tmp/harvest.json
+      - name: Sumar în job summary
+        if: always()
+        run: |
+          node -e '
+            const fs=require("fs");
+            try{
+              const r=JSON.parse(fs.readFileSync("/tmp/harvest.json","utf8"));
+              const s=r.stats||{};
+              console.log(`termeni=${s.uniqueTerms} prefixe=${s.seedsQueried} noi=${s.newTerms} durata=${Math.round((s.durationMs||0)/1000)}s erori=${(r.errors||[]).length}`);
+              console.log((r.terms||[]).slice(0,15).map((t,i)=>`${i+1}. ${t.term} (${t.score})`).join("\n"));
+            }catch(e){ console.log("nu am putut citi JSON-ul:", e.message); }
+          '
+      - name: Commit datele reale în branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ls -la yt-country-pulse/data/harvest || true
+          git add -f yt-country-pulse/data/harvest/latest-RO.json
+          if git diff --cached --quiet; then
+            echo "nicio schimbare"
+          else
+            git commit -m "data: sugestii RO reale ($(date -u +%F))"
+            git push
+          fi
