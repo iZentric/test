@@ -1,3 +1,5 @@
+import { normalizeText } from './text.js';
+
 // Clasificare pe categorii, pe baza de cuvinte-cheie (RO + EN).
 // E un clasificator euristic: rapid, transparent, fara model. Nu e perfect —
 // interogarile sunt scurte si ambigue ("romania", "cine a castigat"), deci
@@ -103,14 +105,7 @@ const RULES = {
   ],
 };
 
-const NORMALIZE = (s) =>
-  String(s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // scoate diacriticele
-    .replace(/[^a-z0-9\s-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+const NORMALIZE = normalizeText;
 
 // termenii din reguli sunt deja normalizati (fara diacritice)
 const COMPILED = Object.entries(RULES).map(([id, terms]) => ({

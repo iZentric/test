@@ -173,6 +173,16 @@
           </select>
         </div>
 
+        <div class="filters filters-secondary">
+          <button id="cleanMode" class="chip-btn chip-clean" title="Scoate știrile, politica, educația (bac), mâncarea, aplicațiile, emisiunile și subiectele despre țară">🧹 Mod curat</button>
+          <label class="check check-inline">
+            <input id="hideCountry" type="checkbox" />
+            <span>Ascunde subiectele despre <strong id="countryLabel">țară</strong></span>
+          </label>
+          <input id="excludeWords" class="filter-search" type="text" placeholder="Cuvinte excluse, separate prin virgulă (ex: bac, conferinta, restaurant)" autocomplete="off" />
+          <button id="resetFilters" class="btn btn-ghost">Resetează filtrele</button>
+        </div>
+
         <div id="rCats" class="cat-chips"></div>
 
         <div class="table-wrap">
@@ -197,6 +207,33 @@
           <span id="rCount" class="panel-sub">—</span>
           <button id="rMore" class="btn btn-ghost hidden">Arată mai multe</button>
         </div>
+      </section>
+
+      <section class="panel" id="forecastPanel">
+        <div class="panel-head">
+          <h2>Estimare: ce urcă</h2>
+          <span class="panel-sub" id="forecastSub">—</span>
+        </div>
+        <div id="forecastBody" class="forecast"></div>
+        <p class="disclaimer">
+          Calculat din datele colectate: compară media traficului din <strong>ultimele 7 zile</strong> cu media din
+          cele <strong>14 zile dinainte</strong>, pe fiecare interogare (cu netezire, ca să nu iasă valori absurde din 1–2 apariții).
+          E o <em>estimare statistică</em>, nu o predicție: dacă o interogare urcă acum, are șanse să conteze și în perioada următoare.
+          Pentru un calcul corect ai nevoie de minim 21 de zile colectate.
+        </p>
+      </section>
+
+      <section class="panel" id="eventsPanel">
+        <div class="panel-head">
+          <h2>Ce urmează: evenimente recurente</h2>
+          <span class="panel-sub" id="eventsSub">—</span>
+        </div>
+        <div id="eventsBody" class="events"></div>
+        <p class="disclaimer">
+          Nu sunt predicții și nu sunt „căutări viitoare" — sunt evenimente care se repetă anual după reguli cunoscute
+          (sărbători legale, Paște ortodox/catolic, Black Friday, sezoane sportive). În jurul lor apar căutări, în fiecare an.
+          Cele marcate <em>aprox.</em> au dată variabilă.
+        </p>
       </section>
 
       <section class="panel" id="catPanel">

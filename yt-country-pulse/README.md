@@ -29,6 +29,26 @@ UI web + CLI, zero dependințe, Node 18+.
 
 Un an întreg = ~365 de cereri, adică **5–10 minute** în fundal. Zilele luate se cache-uiesc 60 de zile, deci o re-colectare e aproape instantă. Rezultatele se scriu și în `data/collections/`.
 
+### 🧹 Mod curat — fără știri, țară, bac, mâncare, aplicații
+
+Un click pe **Mod curat** scoate exact lucrurile care nu te interesează:
+
+- categorii întregi: **Știri & Actualitate**, **Politică**, **Educație** (bac/admitere), **Lifestyle & Rețete** (mâncare, restaurante), **Tehnologie** (aplicații), **TV & Emisiuni** (conferințe de presă, talk-show);
+- **subiecte despre țară**: numele țării, capitala și orașele mari (pentru RO: „românia", „bucurești", „cluj", „timișoara"…);
+- **cuvinte custom**, editabile: `bac, bacalaureat, conferinta, aplicatie, reteta, restaurant, meniu…`.
+
+Ce rămâne: sport, muzică, film/serial, gaming, vedete, auto, bani, sănătate, vremea, loto — adică subiectele pentru care lumea chiar deschide YouTube.
+Filtrele se salvează în browser și se aplică și în tabel, și în estimare. Butonul **Resetează filtrele** le scoate pe toate.
+
+### Ce urmează — estimare, nu ghicit
+
+Două panouri, ambele marcate clar ca estimări:
+
+1. **Estimare: ce urcă** — pentru fiecare interogare compară media traficului din **ultimele 7 zile** cu media din **cele 14 zile dinainte** (cu netezire, ca să nu iasă valori absurde din 1–2 apariții). Rezultatul e un multiplicator (×1,4 = trafic cu 40% mai mare în ultima săptămână). Cere minim ~21 de zile colectate.
+2. **Ce urmează: evenimente recurente** — sărbători legale, **Paște ortodox/catolic** (calculat corect), Floriile, Rusaliile, **Black Friday** (a 4-a vineri din noiembrie), Cyber Monday, Crăciun, Revelion, Super Bowl, Eurovision, Oscar. Fiecare cu cuvintele pe care le caută lumea în jurul lui. Evenimentele specifice României apar doar pentru RO.
+
+Asta e tot ce se poate spune onest despre „ce se va căuta luna viitoare": **momentum** din date reale + **calendar** de evenimente care se repetă. Nimeni nu poate ști căutările viitoare — dar poți ști ce urcă acum și ce se apropie.
+
 ---
 
 ## Ce e posibil și ce nu (important)
@@ -139,7 +159,11 @@ Flag-uri: `--range`, `--from`, `--to`, `--exclude` (id-uri de categorii), `--top
 
 `series` există doar pentru primele 150 de rânduri (sparkline în tabel).
 
-Alte rute: `GET /api/health`, `GET /api/countries`, `GET /api/pulse?geo=RO&demo=1`.
+### Evenimente
+
+`GET /api/events?geo=RO&days=75` → `{ ok: true, events: [{ date, name, kind, kindLabel, keywords, why, approx, daysUntil }] }`
+
+Alte rute: `GET /api/health`, `GET /api/countries` (include `terms` — numele țării, capitala, aliasurile, pentru filtrul „ascunde subiectele despre țară"), `GET /api/pulse?geo=RO&demo=1`.
 
 ---
 
@@ -156,6 +180,8 @@ yt-country-pulse/
 │   ├── collect.js       # colectare zi cu zi, pauze politicoase, retry 429, cache 60 zile
 │   ├── aggregate.js     # unificare interogări + metrici + serii
 │   ├── classify.js      # categorii pe cuvinte-cheie (RO+EN), 17 categorii
+│   ├── events.js        # evenimente recurente (Paște calculat, Black Friday, sărbători)
+│   ├── text.js          # normalizare fără diacritice + potrivire pe cuvinte
 │   ├── jobs.js          # job-uri în fundal, progres, anulare, salvare pe disc
 │   ├── http.js          # fetch + cookie jar + retry/backoff + strip XSSI + probe rețea
 │   ├── cache.js         # cache pe disc cu TTL
@@ -172,6 +198,7 @@ yt-country-pulse/
 - **Cotă YouTube:** 10.000 unități/zi → practic nelimitat pentru uz personal.
 - **Rate limit local:** 40 cereri/minut/IP; cache-ul face refresh-urile ieftine.
 - **Clasificare:** euristică, nu model. „românia", nume de oameni, branduri → „Altele". Filtrele de text și de zile compensează.
+- **Estimarea:** e un multiplicator istoric, nu o predicție. O interogare poate urca din motive pe care datele nu le conțin (un meci, un deces, un trend pe TikTok).
 
 ## Deploy pe Vercel
 

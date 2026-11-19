@@ -50,6 +50,47 @@ export function aggregate(days) {
   }
 
   const dates = days.map((d) => d.date);
+
+  // Momentum: ultimele 7 zile vs cele 14 dinaintea lor.
+  // Doar daca intervalul e destul de lung ca sa aiba sens.
+  const last7 = new Set(dates.slice(-7));
+  const prev14 = new Set(dates.slice(-21, -7));
+  const momentumValid = prev14.size >= 3;
+
+  // Prior: traficul mediu al unei interogari intr-o zi. Netezește cazurile
+  // in care interogarea nu apare deloc in perioada de baza.
+  let itemCount = 0;
+  let itemTraffic = 0;
+  for (const d of days) {
+    for (const it of d.items || []) {
+      itemCount += 1;
+      itemTraffic += it.trafficValue || 0;
+    }
+  }
+  const prior = Math.max(1000, itemTraffic / Math.max(itemCount, 1));
+
+  for (const r of map.values()) {
+    let recentSum = 0;
+    let recentDays = 0;
+    let prevSum = 0;
+    for (const p of r.points) {
+      if (last7.has(p.date)) {
+        recentSum += p.traffic;
+        recentDays += 1;
+      } else if (prev14.has(p.date)) {
+        prevSum += p.traffic;
+      }
+    }
+    const recentAvg = recentSum / Math.max(last7.size, 1);
+    const prevAvg = prevSum / Math.max(prev14.size, 1);
+    r.recentDays = recentDays;
+    r.recentAvg = Math.round(recentAvg);
+    r.prevAvg = Math.round(prevAvg);
+    r.momentum = momentumValid
+      ? Math.min(9.9, Number(((recentAvg + prior) / (prevAvg + prior)).toFixed(2)))
+      : null;
+  }
+
   const rows = [...map.values()]
     .map((r) => ({
       query: r.query,
@@ -63,6 +104,10 @@ export function aggregate(days) {
       lastSeen: r.lastSeen,
       bestDay: r.bestDay,
       consistency: Number((r.days / Math.max(days.length, 1)).toFixed(3)),
+      momentum: r.momentum,
+      recentDays: r.recentDays,
+      recentAvg: r.recentAvg,
+      prevAvg: r.prevAvg,
     }))
     .sort((a, b) => b.totalTraffic - a.totalTraffic || b.days - a.days)
     .slice(0, MAX_ROWS);

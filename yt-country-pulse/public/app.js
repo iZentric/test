@@ -477,12 +477,61 @@ const range = {
   job: null,
   result: null,
   pollTimer: null,
+  events: [],
   excluded: new Set(),
+  hideCountry: false,
+  excludeWords: [],
+  cleanMode: false,
   search: '',
   sort: 'days',
   minDays: 1,
   shown: 300,
 };
+
+const CLEAN_CATEGORIES = ['news', 'politics', 'education', 'lifestyle', 'tech', 'tv'];
+const CLEAN_WORDS = [
+  'bac', 'bacalaureat', 'conferinta', 'conferinte', 'aplicatie', 'aplicatii',
+  'reteta', 'retete', 'restaurant', 'fast food', 'meniu', 'stiri', 'breaking',
+];
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function containsAny(text, terms) {
+  const hay = normalizeText(text);
+  if (!hay) return false;
+  const words = hay.split(' ');
+  for (const raw of terms || []) {
+    const term = normalizeText(raw);
+    if (!term) continue;
+    if (term.includes(' ') || term.includes('-')) {
+      if (hay.includes(term)) return true;
+      continue;
+    }
+    for (const w of words) {
+      if (w === term || w.startsWith(term)) return true;
+    }
+  }
+  return false;
+}
+
+function currentCountry() {
+  const code = $('#rCountry').value || 'RO';
+  return state.countries.find((c) => c.code === code) || { code, name: code, terms: [] };
+}
+
+function currentCountryTerms() {
+  const c = currentCountry();
+  const terms = c.terms && c.terms.length ? c.terms : [c.name];
+  return terms.filter(Boolean);
+}
 
 function addDaysISO(dateStr, delta) {
   const d = new Date(`${dateStr}T00:00:00Z`);
@@ -540,11 +589,13 @@ async function initRange() {
   });
   $('#rSort').addEventListener('change', (e) => {
     range.sort = e.target.value;
+    persistFilters();
     renderTable();
   });
   $('#rMinDays').addEventListener('change', (e) => {
     range.minDays = Number(e.target.value) || 1;
     range.shown = 300;
+    persistFilters();
     renderTable();
   });
   $('#rMore').addEventListener('click', () => {
@@ -552,8 +603,123 @@ async function initRange() {
     renderTable();
     });
 
+  // filtre salvate
+  try {
+    const savedFilters = JSON.parse(localStorage.getItem('ytp.filters') || 'null');
+    if (savedFilters) {
+      range.excluded = new Set(savedFilters.excluded || []);
+      range.hideCountry = Boolean(savedFilters.hideCountry);
+      range.excludeWords = savedFilters.excludeWords || [];
+      range.cleanMode = Boolean(savedFilters.cleanMode);
+      $('#hideCountry').checked = range.hideCountry;
+      $('#excludeWords').value = range.excludeWords.join(', ');
+      $('#cleanMode').classList.toggle('active', range.cleanMode);
+      if (savedFilters.sort) {
+        range.sort = savedFilters.sort;
+        $('#rSort').value = savedFilters.sort;
+      }
+      if (savedFilters.minDays) {
+        range.minDays = savedFilters.minDays;
+        $('#rMinDays').value = String(savedFilters.minDays);
+      }
+    }
+  } catch {
+    /* ignoram filtrele corupte */
+  }
+
+  $('#hideCountry').addEventListener('change', (e) => {
+    range.hideCountry = e.target.checked;
+    persistFilters();
+    refreshFiltered();
+  });
+
+  $('#excludeWords').addEventListener('input', (e) => {
+    range.excludeWords = e.target.value
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
+    persistFilters();
+    refreshFiltered();
+  });
+
+  $('#cleanMode').addEventListener('click', () => applyCleanMode(!range.cleanMode));
+  $('#resetFilters').addEventListener('click', resetFilters);
+  $('#rCountry').addEventListener('change', () => {
+    updateCountryLabel();
+    fetchEvents();
+  });
+
+  updateCountryLabel();
+  fetchEvents();
+
   const saved = localStorage.getItem('ytp.job');
   if (saved) resumeJob(saved);
+}
+
+function updateCountryLabel() {
+  const c = currentCountry();
+  $('#countryLabel').textContent = c.name || c.code;
+}
+
+function persistFilters() {
+  localStorage.setItem(
+    'ytp.filters',
+    JSON.stringify({
+      excluded: [...range.excluded],
+      hideCountry: range.hideCountry,
+      excludeWords: range.excludeWords,
+      cleanMode: range.cleanMode,
+      sort: range.sort,
+      minDays: range.minDays,
+    }),
+  );
+}
+
+function applyCleanMode(on) {
+  range.cleanMode = on;
+  if (on) {
+    range.excluded = new Set(CLEAN_CATEGORIES);
+    range.hideCountry = true;
+    range.excludeWords = [...CLEAN_WORDS];
+  } else {
+    range.excluded = new Set();
+    range.hideCountry = false;
+    range.excludeWords = [];
+  }
+  $('#hideCountry').checked = range.hideCountry;
+  $('#excludeWords').value = range.excludeWords.join(', ');
+  $('#cleanMode').classList.toggle('active', on);
+  persistFilters();
+  refreshFiltered();
+  if (range.result) renderCategoryChips(range.result);
+}
+
+function resetFilters() {
+  range.excluded = new Set();
+  range.hideCountry = false;
+  range.excludeWords = [];
+  range.cleanMode = false;
+  range.search = '';
+  range.minDays = 1;
+  range.sort = 'days';
+  range.shown = 300;
+  $('#hideCountry').checked = false;
+  $('#excludeWords').value = '';
+  $('#cleanMode').classList.remove('active');
+  $('#rSearch').value = '';
+  $('#rMinDays').value = '1';
+  $('#rSort').value = 'days';
+  persistFilters();
+  refreshFiltered();
+  if (range.result) renderCategoryChips(range.result);
+}
+
+function refreshFiltered() {
+  range.shown = 300;
+  if (range.result) {
+    renderTable();
+    renderForecast();
+  }
 }
 
 function showRangeWarnings(items) {
@@ -760,6 +926,7 @@ function renderRange() {
   renderCategoryChips(r);
   renderCategoryBars(r);
   renderTable();
+  renderForecast();
 
   $('#tableSub').textContent = `${r.from} → ${r.to} · ${cov.daysWithData || 0} zile cu date`;
   $('#rangeGeneratedAt').textContent = r.generatedAt
@@ -839,6 +1006,13 @@ function filteredRows() {
   const r = range.result;
   if (!r) return [];
   let rows = (r.rows || []).filter((x) => !range.excluded.has(x.category));
+  if (range.hideCountry) {
+    const terms = currentCountryTerms();
+    rows = rows.filter((x) => !containsAny(x.query, terms));
+  }
+  if (range.excludeWords.length) {
+    rows = rows.filter((x) => !containsAny(x.query, range.excludeWords));
+  }
   if (range.minDays > 1) rows = rows.filter((x) => x.days >= range.minDays);
   if (range.search) rows = rows.filter((x) => x.query.toLowerCase().includes(range.search));
 
@@ -895,6 +1069,111 @@ function renderTable() {
 
   $('#rCount').textContent = `${nf.format(rows.length)} interogări după filtre${rows.length > shown.length ? ` · afișate ${nf.format(shown.length)}` : ''}`;
   $('#rMore').classList.toggle('hidden', rows.length <= shown.length);
+}
+
+/* ---------------- estimare (momentum) ---------------- */
+
+function renderForecast() {
+  const r = range.result;
+  const box = $('#forecastBody');
+  const sub = $('#forecastSub');
+
+  if (!r) {
+    box.innerHTML = '<p class="empty">Colectează o perioadă ca să vezi estimarea.</p>';
+    sub.textContent = '—';
+    return;
+  }
+
+  const hasMomentum = (r.rows || []).some((x) => x.momentum !== null && x.momentum !== undefined);
+  if (!hasMomentum) {
+    box.innerHTML = '<p class="empty">Ai nevoie de minim ~21 de zile colectate ca estimarea să aibă sens (comparație 7 zile vs 14 zile).</p>';
+    sub.textContent = 'interval prea scurt';
+    return;
+  }
+
+  const meta = categoryMeta(r);
+  const base = filteredRows().filter(
+    (x) => typeof x.momentum === 'number' && x.momentum >= 1.12 && (x.recentDays || 0) >= 2,
+  );
+  const top = base
+    .sort((a, b) => b.momentum - a.momentum || (b.recentAvg || 0) - (a.recentAvg || 0))
+    .slice(0, 15);
+
+  if (!top.length) {
+    box.innerHTML = '<p class="empty">Nimic în creștere clară pentru filtrele curente. Încearcă „Mod curat" oprit sau un interval mai lung.</p>';
+    sub.textContent = '0 semnale';
+    return;
+  }
+
+  sub.textContent = `${top.length} interogări cu trafic în creștere · ultimele 7 zile vs cele 14 dinainte`;
+
+  box.innerHTML = top
+    .map((x, i) => {
+      const c = meta.get(x.category) || { label: 'Altele', emoji: '📦' };
+      const hot = x.momentum >= 1.35;
+      return `<div class="fcast-row">
+        <span class="pos">${i + 1}</span>
+        <span>
+          <span class="q">${esc(x.query)}</span>
+          <div class="meta">apărut în ${x.recentDays}/7 zile recente · ${x.days} zile în total</div>
+        </span>
+        <span class="cat">${esc(c.emoji)} ${esc(c.label)}</span>
+        <span class="mom ${hot ? 'hot' : ''}">×${x.momentum.toFixed(2)}</span>
+      </div>`;
+    })
+    .join('');
+}
+
+/* ---------------- evenimente recurente ---------------- */
+
+async function fetchEvents() {
+  const geo = $('#rCountry').value || 'RO';
+  try {
+    const res = await fetch(`/api/events?geo=${encodeURIComponent(geo)}&days=75`);
+    const data = await res.json();
+    range.events = data.events || [];
+  } catch {
+    range.events = [];
+  }
+  renderEvents();
+}
+
+function formatEventDate(isoDate) {
+  const [, m, d] = isoDate.split('-');
+  return `${d}.${m}`;
+}
+
+function renderEvents() {
+  const box = $('#eventsBody');
+  const sub = $('#eventsSub');
+  const events = range.events || [];
+
+  if (!events.length) {
+    box.innerHTML = '<p class="empty">Niciun eveniment recurent în perioada următoare.</p>';
+    sub.textContent = '—';
+    return;
+  }
+
+  sub.textContent = `următoarele 75 de zile · ${events.length} evenimente`;
+  box.innerHTML = events
+    .map((e) => {
+      const when =
+        e.daysUntil <= 0 ? 'azi' : e.daysUntil === 1 ? 'mâine' : e.daysUntil < 14 ? `peste ${e.daysUntil}z` : `peste ${e.daysUntil}z`;
+      const chips = (e.keywords || [])
+        .slice(0, 4)
+        .map((k) => `<span class="chip">${esc(k)}</span>`)
+        .join('');
+      return `<div class="event">
+        <span class="date">${esc(formatEventDate(e.date))}${e.approx ? ' <span class="hint">aprox.</span>' : ''}</span>
+        <span>
+          <span class="name">${esc(e.name)}</span>
+          <div class="why">${esc(e.why)}</div>
+          ${chips ? `<div class="chips">${chips}</div>` : ''}
+        </span>
+        <span class="in ${e.daysUntil <= 7 ? 'now' : ''}">${esc(when)}</span>
+      </div>`;
+    })
+    .join('');
 }
 
 /* ---------------- export perioadă ---------------- */

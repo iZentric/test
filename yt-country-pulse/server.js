@@ -6,7 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildPulse } from './lib/pulse.js';
-import { COUNTRIES } from './lib/countries.js';
+import { COUNTRIES, countryTerms } from './lib/countries.js';
+import { upcomingEvents } from './lib/events.js';
 import { createJob, getJob, cancelJob, listJobs, jobMeta } from './lib/jobs.js';
 import { MAX_DAYS, isValidDate } from './lib/collect.js';
 
@@ -107,7 +108,18 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/api/countries') {
-      sendJson(res, 200, { countries: COUNTRIES });
+      sendJson(res, 200, {
+        countries: COUNTRIES.map((c) => ({ ...c, terms: countryTerms(c.code) })),
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/events') {
+      const geo = String(url.searchParams.get('geo') || 'RO').toUpperCase().slice(0, 2);
+      const days = Number(url.searchParams.get('days') || 60);
+      const from = url.searchParams.get('from') || undefined;
+      const events = upcomingEvents({ geo, days: Number.isFinite(days) ? days : 60, from });
+      sendJson(res, 200, { ok: true, geo, events });
       return;
     }
 
