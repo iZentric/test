@@ -1,0 +1,639 @@
+{
+  "geo": "RO",
+  "hl": "ro",
+  "finishedAt": "2026-11-19T02:47:08.191Z",
+  "target": {
+    "name": "Jocuri Horror",
+    "names": [
+      "jocuri horror",
+      "sky s dreams"
+    ],
+    "videoIds": [
+      "JVUetFBzXak",
+      "9jbqXWK61jo",
+      "wdzm_qIn43k",
+      "Rdc1hOH5lKM",
+      "5E-rGTAsQa8",
+      "bqYXVYXqfsE",
+      "0jwl1Z7BMWo",
+      "qHoY2g_YYHA",
+      "Z3_hW2I7nc4",
+      "1JgiaGhaXQc"
+    ]
+  },
+  "stats": {
+    "queriesTested": 103,
+    "matched": 7,
+    "matchedTop3": 6,
+    "matchedTop10": 7,
+    "noMatch": 96,
+    "requests": 103,
+    "durationMs": 91021,
+    "errors": 0,
+    "method": "innertube"
+  },
+  "matches": [
+    {
+      "query": "jocuri horror",
+      "position": 1,
+      "via": "video",
+      "title": "Cum a fost LANSAREA PAM PAM ?",
+      "videoId": "JVUetFBzXak",
+      "url": "https://www.youtube.com/watch?v=JVUetFBzXak",
+      "channel": "Jocuri Horror",
+      "published": "acum 11 ore",
+      "views": "111.425 de vizionări",
+      "results": 20
+    },
+    {
+      "query": "jocuri horror noi",
+      "position": 1,
+      "via": "canal",
+      "title": "A trebuit sa CANT 😭",
+      "videoId": "FxosMoeoGBU",
+      "url": "https://www.youtube.com/watch?v=FxosMoeoGBU",
+      "channel": "Jocuri Horror",
+      "published": "acum 2 luni",
+      "views": "259.732 de vizionări",
+      "results": 20
+    },
+    {
+      "query": "pam pam",
+      "position": 1,
+      "via": "video",
+      "title": "Cea mai TARE ZI din VIATA MEA !",
+      "videoId": "JVUetFBzXak",
+      "url": "https://www.youtube.com/watch?v=JVUetFBzXak",
+      "channel": "Jocuri Horror",
+      "published": "acum 11 ore",
+      "views": "111.425 de vizionări",
+      "results": 20
+    },
+    {
+      "query": "pam pam joc",
+      "position": 1,
+      "via": "video",
+      "title": "Despre ZIUA cu Sucul PAM PAM !",
+      "videoId": "JVUetFBzXak",
+      "url": "https://www.youtube.com/watch?v=JVUetFBzXak",
+      "channel": "Jocuri Horror",
+      "published": "acum 11 ore",
+      "views": "111.425 de vizionări",
+      "results": 20
+    },
+    {
+      "query": "tatal strict",
+      "position": 1,
+      "via": "video",
+      "title": "L-am SALVAT pe Tatal STRICT de EMILIA !",
+      "videoId": "1JgiaGhaXQc",
+      "url": "https://www.youtube.com/watch?v=1JgiaGhaXQc",
+      "channel": "Jocuri Horror",
+      "published": "acum 4 zile",
+      "views": "200.130 de vizionări",
+      "results": 20
+    },
+    {
+      "query": "sky",
+      "position": 3,
+      "via": "video",
+      "title": "Cum a fost LANSAREA PAM PAM ?",
+      "videoId": "JVUetFBzXak",
+      "url": "https://www.youtube.com/watch?v=JVUetFBzXak",
+      "channel": "Jocuri Horror",
+      "published": "acum 11 ore",
+      "views": "111.425 de vizionări",
+      "results": 20
+    },
+    {
+      "query": "jocuri horror romania",
+      "position": 9,
+      "via": "video",
+      "title": "Cum a fost LANSAREA PAM PAM ?",
+      "videoId": "JVUetFBzXak",
+      "url": "https://www.youtube.com/watch?v=JVUetFBzXak",
+      "channel": "Jocuri Horror",
+      "published": "acum 11 ore",
+      "views": "111.425 de vizionări",
+      "results": 20
+    }
+  ],
+  "tested": [
+    {
+      "query": "pam pam",
+      "results": 20,
+      "position": 1
+    },
+    {
+      "query": "pam pam joc",
+      "results": 20,
+      "position": 1
+    },
+    {
+      "query": "jocuri horror",
+      "results": 20,
+      "position": 1
+    },
+    {
+      "query": "jocuri horror romania",
+      "results": 20,
+      "position": 9
+    },
+    {
+      "query": "jocuri horror noi",
+      "results": 20,
+      "position": 1
+    },
+    {
+      "query": "tatal strict",
+      "results": 20,
+      "position": 1
+    },
+    {
+      "query": "garten of banban",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "poppy playtime",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "huggy wuggy",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "backrooms",
+      "results": 19,
+      "position": null
+    },
+    {
+      "query": "fnaf",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "horror games",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "skibidi wc",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "99 nights in the forest roblox",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "07 cat vrei tu",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "99 nights in the forest",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cat ai fost de haimana",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder gta 6",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 iraphahell",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "ce a fost a fost",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder minecraft",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 gameplay",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 live",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "7 din 7",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "isilent",
+      "results": 19,
+      "position": null
+    },
+    {
+      "query": "xbox series s gta 6",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 trailer",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "ti-am furat femeia",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "iraphahell",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "sky",
+      "results": 20,
+      "position": 3
+    },
+    {
+      "query": "cat traim pe acest pamant",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cel mai mare cutremur din lume",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta vi",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cat or fi colindatori",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "snik",
+      "results": 19,
+      "position": null
+    },
+    {
+      "query": "8 zile din 7",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "bercea gta 6",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder granny impossible",
+      "results": 0,
+      "position": null
+    },
+    {
+      "query": "highman",
+      "results": 19,
+      "position": null
+    },
+    {
+      "query": "100 de ani",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "un motan cât un pisoi",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cutremurul din 1977",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "âârøn when the music ends",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "capra cu trei iezi",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cat poti tu de tare",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 ps5",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "nopti si zile ma gandesc la tine",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "rares 77 yt capra",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "ţaţaţa căpriţă ţa te-am adus din africa",
+      "results": 17,
+      "position": null
+    },
+    {
+      "query": "xslayder dacia",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "4 nopți și 4 zile",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "100 kile",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "denisa emilia răducu",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "maxinfinite",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "123 go romana scoala",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "7 din 7 vanilla",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cel mai mare cutremur din romania",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "werty gta",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder dropper",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "100 de calendare",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cand vine noaptea",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "de ce ai plecat din viata mea",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "știrile pro tv din 18 noiembrie 2026",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "ţaţaţa căpriţă ţa te-am adus din moldova",
+      "results": 14,
+      "position": null
+    },
+    {
+      "query": "0 la 100",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cand se duce iubirea",
+      "results": 0,
+      "position": null
+    },
+    {
+      "query": "cel mai puternic cutremur din lume",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "leo de la rosiori daca ma scoti din minte",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "știrile pro tv gta 6",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder clash royale",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "4 nopti si 4 zile original clip",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "capra țațața căpriță ța",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "cat sound",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "bercea gta 5",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 xbox series s",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "orange blue casa din carton",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder brawl stars",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 romania",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "quiz erou cadouri",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder bedwars",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 full game",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder build battle",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "dani mocanu tu vrei zi de zi de toate",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 song",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder funny moments",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "catel din balon",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 walkthrough",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "povesti pentru copii capra cu trei iezi",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "știrile pro tv din seara asta",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder standoff 2",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 countdown",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "jador fana",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder clovni",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "123 go romana sarac sau bogat",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "50 cent in the club",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "bercea live gta 6",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 live new zealand",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "gta 6 review",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "orange blue peste tot este lava",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "quiz erou brainrot",
+      "results": 20,
+      "position": null
+    },
+    {
+      "query": "xslayder masina",
+      "results": 20,
+      "position": null
+    }
+  ],
+  "errors": []
+}
