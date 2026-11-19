@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YouTube Country Pulse — ce a căutat o țară într-o zi</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">▶</span>
+      <div>
+        <h1>YouTube Country Pulse</h1>
+        <p class="sub">Ce a căutat o țară pe YouTube într-o zi — căutări în trend, videoclipuri și interes pe cuvinte.</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="modePill" class="pill pill-idle">în așteptare</span>
+      <button id="exportJson" class="btn btn-ghost" title="Descarcă răspunsul complet ca JSON">JSON</button>
+      <button id="exportCsv" class="btn btn-ghost" title="Descarcă tabelele ca CSV">CSV</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel controls" aria-label="Filtre">
+      <div class="field">
+        <label for="country">Țara</label>
+        <select id="country"></select>
+      </div>
+      <div class="field">
+        <label for="date">Ziua</label>
+        <input id="date" type="date" />
+      </div>
+      <div class="field field-wide">
+        <label for="seed">Cuvânt de urmărit pe YouTube Search <span class="hint">(opțional)</span></label>
+        <input id="seed" type="text" placeholder="ex: vremea, alegeri, fotbal" autocomplete="off" />
+      </div>
+      <div class="field field-actions">
+        <button id="load" class="btn btn-primary">Încarcă</button>
+      </div>
+      <details class="advanced">
+        <summary>Setări avansate</summary>
+        <div class="advanced-body">
+          <div class="field">
+            <label for="apiKey">Cheie YouTube Data API v3 <span class="hint">(rămâne doar în browserul tău)</span></label>
+            <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
+          </div>
+          <label class="check">
+            <input id="demo" type="checkbox" />
+            <span>Mod demo (date eșantion, fără cereri către Google)</span>
+          </label>
+        </div>
+      </details>
+    </section>
+
+    <section id="warnings" class="warnings hidden" aria-live="polite"></section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Videoclipuri în trend</h2>
+          <span class="panel-sub" id="videosSub">—</span>
+        </div>
+        <div id="videos" class="videos"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Căutări în trend</h2>
+          <span class="panel-sub" id="searchesSub">—</span>
+        </div>
+        <div id="searches" class="searches"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="seedPanel">
+      <div class="panel-head">
+        <h2>Interes YouTube Search</h2>
+        <span class="panel-sub" id="seedSub">introdu un cuvânt ca să vezi seria</span>
+      </div>
+      <div id="seedBody" class="seed-body">
+        <p class="empty">Scrie un cuvânt în câmpul de sus (ex. <code>vremea</code>) ca să vezi cum a evoluat interesul pe YouTube Search în ziua aleasă, plus interogările asociate.</p>
+      </div>
+    </section>
+
+    <section class="panel sources">
+      <div class="panel-head">
+        <h2>Surse & transparență</h2>
+        <span class="panel-sub" id="generatedAt"></span>
+      </div>
+      <div id="sources" class="source-list"></div>
+      <p class="disclaimer">
+        YouTube nu publică lista completă a tuturor căutărilor făcute într-o țară într-o zi — nu există public.
+        Acest tool combină cele două surse reale disponibile: <strong>trend-uri zilnice</strong> (Google Trends, endpoint public
+        folosit și de site-ul lor) și <strong>videoclipurile în trend</strong> (YouTube Data API, oficial), plus interesul pe
+        un cuvânt anume în filtrul <em>YouTube Search</em>.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Rulează local cu <code>npm start</code> · fără dependințe · date cache-uite 15–30 min</span>
+    <span id="footGeo"></span>
+  </footer>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "yt-country-pulse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Ce a cautat o tara pe YouTube intr-o zi: cautari in trend + videoclipuri in trend, pe tara si data.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "cli": "node cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}
