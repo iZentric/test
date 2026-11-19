@@ -515,6 +515,29 @@
         <div id="vzDays" class="vz-days"></div>
       </section>
 
+      <section class="panel" id="vzChannelPanel">
+        <div class="panel-head">
+          <h2>Căutări reale din România care aduc canalul în rezultate</h2>
+          <span class="panel-sub" id="vzChannelSub"></span>
+        </div>
+        <p class="panel-sub" style="margin:0 0 10px">
+          Pentru fiecare interogare care are legătură cu canalul, se interoghează <em>căutarea YouTube</em>
+          (endpoint-ul public al site-ului, fără cheie API) și se verifică dacă un videoclip al canalului
+          apare în primele 20 de rezultate. Ce vezi mai jos e poziția reală la momentul rulării, nu o estimare.
+        </p>
+        <div id="vzChannelWarn" class="warnings hidden" aria-live="polite"></div>
+        <div class="stats" id="vzChannelStats"></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table class="data-table" id="vzChannelTable">
+            <thead>
+              <tr><th>#</th><th>Căutare</th><th class="num">Poziție</th><th>Videoclip găsit</th><th>Cum</th></tr>
+            </thead>
+            <tbody id="vzChannelBody"></tbody>
+          </table>
+        </div>
+        <p class="panel-sub" id="vzChannelFoot" style="margin-top:10px"></p>
+      </section>
+
       <section class="panel sources">
         <div class="panel-head"><h2>Ce e — și ce nu e</h2></div>
         <p class="disclaimer">

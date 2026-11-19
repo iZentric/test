@@ -11,6 +11,8 @@ const state = {
   activeView: 'day',
   vidiq: null,
   vidiqSort: 'views',
+  channelMatch: null,
+  channelLoading: false,
 };
 
 const nf = new Intl.NumberFormat('ro-RO');
@@ -646,6 +648,7 @@ function switchTab(name) {
   $('#view-range').classList.toggle('hidden', state.activeView !== 'range');
   $('#view-harvest').classList.toggle('hidden', state.activeView !== 'harvest');
   $('#view-vidiq').classList.toggle('hidden', state.activeView !== 'vidiq');
+  if (state.activeView === 'vidiq') loadChannelMatch();
   refreshPill();
 }
 
@@ -1990,6 +1993,83 @@ async function copyVidiqKeywords() {
   setTimeout(() => {
     btn.textContent = label;
   }, 2200);
+}
+
+/* ---------------- căutări reale care aduc canalul în rezultate ---------------- */
+
+async function loadChannelMatch({ force = false } = {}) {
+  if (state.channelLoading) return;
+  if (state.channelMatch && !force) return;
+  state.channelLoading = true;
+  const box = $('#vzChannelWarn');
+  try {
+    const geo = localStorage.getItem('ytp.geo') || 'RO';
+    const res = await fetch(`/api/channel/latest?geo=${encodeURIComponent(geo)}`);
+    const data = await res.json();
+    state.channelMatch = data.latest || null;
+  } catch {
+    state.channelMatch = null;
+  } finally {
+    state.channelLoading = false;
+  }
+  renderChannelMatch();
+}
+
+function renderChannelMatch() {
+  const r = state.channelMatch;
+  const box = $('#vzChannelWarn');
+  if (!r) {
+    box.classList.remove('hidden');
+    box.innerHTML =
+      '<div class="warn-item"><span class="ico">ℹ</span><span>Nu există încă o rulare pentru țara asta. ' +
+      'Se generează cu <code>node cli.js --channel-match</code> (sau automat, în GitHub Actions).</span></div>';
+    $('#vzChannelStats').innerHTML = '';
+    $('#vzChannelBody').innerHTML = '';
+    $('#vzChannelSub').textContent = 'fără date';
+    $('#vzChannelFoot').textContent = '';
+    return;
+  }
+  box.classList.add('hidden');
+  box.innerHTML = '';
+
+  const s = r.stats || {};
+  const tested = s.queriesTested || 0;
+  const matched = s.matched || 0;
+  const rate = tested ? Math.round((matched / tested) * 100) : 0;
+  $('#vzChannelSub').textContent = `${r.target?.name || 'canal'} · ${matched}/${tested} căutări (${rate}%)`;
+  $('#vzChannelStats').innerHTML = [
+    { k: 'Căutări testate', v: nf.format(tested), m: `${nf.format(s.requests || 0)} cereri către YouTube` },
+    { k: 'Aduc canalul', v: nf.format(matched), m: `${rate}% din interogările relevante` },
+    { k: 'În top 3', v: nf.format(s.matchedTop3 || 0), m: `top 10: ${nf.format(s.matchedTop10 || 0)}` },
+    { k: 'Rulat la', v: r.finishedAt ? r.finishedAt.slice(0, 10) : '—', m: `${Math.round((s.durationMs || 0) / 1000)}s · ${s.method || '—'}` },
+  ]
+    .map((c) => `<div class="stat"><div class="k">${esc(c.k)}</div><div class="v">${esc(c.v)}</div><div class="m">${esc(c.m)}</div></div>`)
+    .join('');
+
+  const rows = (r.matches || []).slice(0, 80);
+  $('#vzChannelBody').innerHTML = rows.length
+    ? rows
+        .map(
+          (m) => `<tr>
+            <td class="tnum">#${m.position}</td>
+            <td class="title-cell">${esc(m.query)}</td>
+            <td class="tnum num">${m.position}</td>
+            <td class="title-cell"><a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a></td>
+            <td class="tnum">${m.via === 'video' ? 'videoclip din CSV' : 'canal'}</td>
+          </tr>`,
+        )
+        .join('')
+    : '<tr><td colspan="5" class="kw-none">Nicio potrivire — canalul nu apare în primele 20 de rezultate pentru interogările testate.</td></tr>';
+
+  const errs = r.errors?.length || 0;
+  $('#vzChannelFoot').textContent = [
+    `${matched} căutări aduc canalul în primele 20 de rezultate`,
+    s.noMatch ? `${nf.format(s.noMatch)} testate fără potrivire` : '',
+    errs ? `${errs} cereri au eșuat` : '',
+    s.method ? `metodă: ${s.method}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 init();

@@ -86,6 +86,46 @@ Rulare: ~50–100 de cereri, 40–90 de secunde. Pauze între cereri (220 ms + j
 - **`q=` gol nu întoarce nimic.** Ideea că un query gol îți dă „top 10 căutări" e falsă; se vede și în dump-ul de referință (`[GLOBAL_EMPTY_Q] -> ` gol).
 - Endpoint public, neoficial, fără autentificare. Uz personal / cercetare, cu pauze. Nu e „hack", dar nici garantat stabil.
 
+## Căutări reale care aduc un canal în rezultate
+
+„Ce caută lumea din România pe YouTube încât să ajungă la canalul X?" — răspuns măsurat, nu estimat.
+
+Pentru fiecare interogare relevantă se interoghează **căutarea YouTube** (endpoint-ul public `youtubei/v1/search`,
+pe care îl folosește youtube.com; fără cheie API, fără OAuth, fallback pe pagina HTML dacă JSON-ul nu vine),
+se iau primele 20 de rezultate și se verifică dacă un videoclip al canalului apare acolo — după **ID-ul videoclipului**
+(sigur) sau după **numele canalului** (tolerant, fără diacritice).
+
+```bash
+cd yt-country-pulse
+node cli.js --channel-match \
+  --target config/channel-target.json \
+  --queries data/harvest/latest-RO.json \
+  --max 120 --delay 400
+# → data/channel/latest-RO.json + tabel în consolă
+```
+
+Rezultatul conține, pentru fiecare potrivire: interogarea, **poziția** (1–20), titlul videoclipului găsit,
+linkul și felul potrivirii (`video` = e chiar un videoclip din export; `canal` = alt videoclip al aceluiași canal).
+Sumarul numără câte interogări aduc canalul, câte în top 3 / top 10, câte au eșuat.
+
+UI: tab **Analiză canal (vidIQ)** → panoul „Căutări reale din România care aduc canalul în rezultate" (citește `GET /api/channel/latest`).
+
+### De unde vin datele reale
+
+Sandbox-ul de dezvoltare nu are acces la Google, deci colectarea reală rulează pe **GitHub Actions**
+(`.github/workflows/harvest-ro.yml`), care are internet:
+
+1. `node cli.js --harvest` → autocomplete YouTube RO (93 de prefixe + nivelul 2) → `data/harvest/latest-RO.json`;
+2. `node cli.js --channel-match` → căutarea YouTube pentru interogările relevante → `data/channel/latest-RO.json`;
+3. bot-ul comite ambele fișiere în branch, iar aplicația le servește prin `/api/harvest/latest` și `/api/channel/latest`.
+
+Rulează la fiecare push pe branch (commit-urile de date nu repornesc bucla). Poți rula aceleași comenzi și local —
+dacă mașina ta vede Google, datele sunt identice.
+
+**Ce nu e:** nu e „YouTube Analytics". Analytics-ul canalului (OAuth) îți dă exact termenii de căutare care au adus
+trafic; metoda de aici măsoară altceva, la fel de real: **pentru ce interogări apare canalul în rezultate acum**.
+Un videoclip poate apărea la poziția 7 și totuși să nu fie click-uit; și invers.
+
 ## Analiză canal din export vidIQ (CSV)
 
 Tab nou, 100% local (nimic nu pleacă pe server): tragi în pagină un export CSV din vidIQ — de canal, de „top videos", sau orice tabel cu coloanele `TITLE`, `VIEWS`, `KEYWORDS`, `DURATION`, `DATE PUBLISHED`, `VIDIQ SCORE` — și primești pe loc:
@@ -230,6 +270,8 @@ Flag-uri: `--range`, `--from`, `--to`, `--exclude` (id-uri de categorii), `--top
 `GET /api/harvest/latest?geo=RO` → ultima rulare salvată (pentru diff și afișare)
 `POST /api/harvest/:id/cancel`
 
+`GET /api/channel/latest?geo=RO` → `{ ok, geo, latest }` — ultima rulare de potrivire canal (poziții reale în căutare).
+
 Alte rute: `GET /api/health`, `GET /api/countries` (include `terms` — numele țării, capitala, aliasurile, pentru filtrul „ascunde subiectele despre țară"), `GET /api/pulse?geo=RO&demo=1`.
 
 ---
@@ -250,6 +292,7 @@ yt-country-pulse/
 │   ├── events.js        # evenimente recurente (Paște calculat, Black Friday, sărbători)
 │   ├── suggest.js       # client autocomplete YouTube (JSONP, encoding tolerant)
 │   ├── harvest.js       # crawler 2 niveluri + scor + diff între rulări
+│   ├── channel.js       # căutare YouTube + potrivire canal (ce interogări îl aduc în rezultate)
 │   ├── text.js          # normalizare fără diacritice + potrivire pe cuvinte
 │   ├── jobs.js          # job-uri în fundal, progres, anulare, salvare pe disc
 │   ├── http.js          # fetch + cookie jar + retry/backoff + strip XSSI + probe rețea
@@ -257,6 +300,7 @@ yt-country-pulse/
 │   ├── countries.js     # 63 de țări
 │   └── demo.js          # generator determinist de eșantioane
 ├── public/              # index.html + app.js (vanilla) + vidiq.js (analiză CSV) + styles.css
+├── config/              # channel-target.json — canalul urmărit (nume, ID-uri, tag-uri)
 └── data/collections/    # rezultatele colectărilor (gitignore)
 ```
 
