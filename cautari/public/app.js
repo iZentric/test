@@ -1,4 +1,6 @@
-// Tot ce face pagina: ia /api/data o dată și desenează două liste. Nimic altceva.
+// Tot ce face pagina: ia /api/data o dată și desenează listele. Nimic altceva.
+
+import { buildTags } from './tags.js';
 
 const $ = (sel) => document.querySelector(sel);
 const nf = new Intl.NumberFormat('ro-RO');
@@ -18,7 +20,7 @@ const dataAt = (iso) => {
   return `${d.toLocaleDateString('ro-RO')} ${d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
-const state = { harvest: null, channel: null, terms: [], maxScore: 1, matchedQueries: new Set() };
+const state = { harvest: null, channel: null, terms: [], maxScore: 1, matchedQueries: new Set(), lastTags: [] };
 
 function showError(text) {
   const box = $('#error');
@@ -111,6 +113,71 @@ function renderNoMatch() {
   $('#noMatch').innerHTML = noMatch.map((t) => `<span class="chip">${esc(t)}</span>`).join('');
 }
 
+const KIND_LABEL = {
+  titlu: 'titlu',
+  aduce: 'aduce canalul',
+  cautat: 'căutare reală',
+  creator: 'creator',
+  existent: 'existent',
+};
+
+function renderTags() {
+  const title = $('#tagTitle').value.trim();
+  const existing = $('#tagExisting').value;
+  const result = buildTags({
+    title,
+    existing,
+    terms: state.harvest?.terms || [],
+    tested: state.channel?.tested || [],
+    matches: state.channel?.matches || [],
+  });
+
+  state.lastTags = result.tags;
+
+  $('#tagSub').textContent = title
+    ? `${result.tags.length} tag-uri · ${result.chars}/${result.maxChars} caractere`
+    : 'pune titlul videoclipului';
+  $('#tagCount').textContent = result.tags.length ? `${result.chars}/${result.maxChars} caractere` : '';
+  $('#tagCopy').classList.toggle('hidden', !result.tags.length);
+
+  $('#tagList').innerHTML = result.tags
+    .map(
+      (t, i) => `<li>
+        <span class="n">${i + 1}</span>
+        <span class="tg"><span class="k k-${esc(t.kind)}">${esc(KIND_LABEL[t.kind] || t.kind)}</span>${esc(t.tag)}</span>
+        <span class="why">${esc(t.why)}</span>
+      </li>`,
+    )
+    .join('');
+
+  const dropped = result.dropped.slice(0, 120);
+  $('#tagDroppedBox').classList.toggle('hidden', !dropped.length);
+  $('#tagDroppedCount').textContent = `(${result.dropped.length})`;
+  $('#tagDropped').innerHTML = dropped
+    .map((d) => `<span class="chip" title="${esc(d.why)}">${esc(d.tag)}</span>`)
+    .join('');
+
+  if (result.warnings.length) {
+    $('#tagSub').textContent = result.warnings[0];
+  }
+}
+
+async function copyTags() {
+  const text = state.lastTags.map((t) => t.tag.toLowerCase()).join(', ');
+  const btn = $('#tagCopy');
+  try {
+    await navigator.clipboard.writeText(text);
+    const old = btn.textContent;
+    btn.textContent = 'copiat';
+    setTimeout(() => {
+      btn.textContent = old;
+    }, 1600);
+  } catch {
+    console.log(text);
+    btn.textContent = 'copiere blocată';
+  }
+}
+
 async function init() {
   let payload;
   try {
@@ -135,6 +202,12 @@ async function init() {
   renderMatches();
   renderTerms();
   renderNoMatch();
+
+  $('#tagGo').addEventListener('click', renderTags);
+  $('#tagTitle').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') renderTags();
+  });
+  $('#tagCopy').addEventListener('click', copyTags);
 
   $('#search').addEventListener('input', renderTerms);
   $('#onlyMatched').addEventListener('change', renderTerms);

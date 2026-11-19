@@ -144,3 +144,36 @@ details[open] summary { margin-bottom: 12px; }
   .term { grid-template-columns: 30px 1fr auto; }
   .term .bar { display: none; }
 }
+
+/* ---- generator de tag-uri ---- */
+.tag-form { display: flex; flex-direction: column; gap: 10px; }
+.tag-form input, .tag-form textarea {
+  width: 100%;
+  background: #0d141d; color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; font-size: 14px; outline: none; font-family: inherit;
+}
+.tag-form textarea { font-size: 12.5px; resize: vertical; }
+.tag-form input:focus, .tag-form textarea:focus { border-color: #2f4a6b; }
+.tag-form .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.tag-form button {
+  background: #1b3a2f; color: var(--accent); border: 1px solid #1f5140;
+  border-radius: 10px; padding: 9px 16px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.tag-form button:hover { background: #20463a; }
+.tag-form button.ghost { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; }
+.tags { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; counter-reset: tag; }
+.tags li {
+  display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: baseline;
+  padding: 8px 10px; border-radius: 9px; background: #0e1520;
+}
+.tags .n { color: #56657d; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tags .tg { font-size: 14px; word-break: break-word; }
+.tags .why { color: var(--muted); font-size: 12px; text-align: right; }
+.tags .k { font-size: 10.5px; padding: 1px 7px; border-radius: 6px; margin-right: 8px; vertical-align: middle; }
+.k-aduce { background: rgba(52, 211, 153, 0.16); color: #6ee7b7; }
+.k-cautat { background: rgba(96, 165, 250, 0.14); color: #9ec5ff; }
+.k-creator { background: rgba(251, 191, 36, 0.14); color: #fcd34d; }
+.k-exezistent, .k-existent { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; }
+.k-titlu { background: rgba(167, 139, 250, 0.16); color: #c4b5fd; }
+@media (max-width: 640px) { .tags li { grid-template-columns: 22px 1fr; } .tags .why { grid-column: 2; text-align: left; } }

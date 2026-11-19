@@ -35,6 +35,32 @@
 
       <section class="card">
         <div class="card-head">
+          <h2>Generator de tag-uri</h2>
+          <span class="muted" id="tagSub">pune titlul videoclipului</span>
+        </div>
+        <p class="hint">
+          Iese lista ordonată după dovezi: întâi tag-urile care <strong>chiar aduc canalul</strong> în căutare,
+          apoi căutări reale care conțin cuvintele din titlu. Tag-urile lipite mai jos trec prin filtru:
+          cele generice sau numele altor creatori sunt scoase, cu motivul afișat.
+        </p>
+        <div class="tag-form">
+          <input id="tagTitle" type="text" placeholder="titlul videoclipului, ex. PAM PAM inainte de GTA 6" />
+          <textarea id="tagExisting" rows="3" placeholder="(opțional) tag-urile pe care le folosești acum — cu virgulă sau lipite"></textarea>
+          <div class="row">
+            <button id="tagGo">generează tag-urile</button>
+            <button id="tagCopy" class="ghost hidden">copiază lista</button>
+            <span class="muted" id="tagCount"></span>
+          </div>
+        </div>
+        <ol id="tagList" class="tags"></ol>
+        <details id="tagDroppedBox" class="hidden">
+          <summary>Scoase din listă <span id="tagDroppedCount"></span></summary>
+          <div id="tagDropped" class="chips small"></div>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h2>Top căutări în România</h2>
           <span class="muted" id="termsSub">se încarcă…</span>
         </div>
